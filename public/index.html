@@ -24,8 +24,7 @@
     <div class="page-manager">
       <div class="page-status"></div>
       <select id="page-select" onchange="changePage()">
-        <option value="108854017400465" selected>JoY - Căn hộ/Phòng trọ</option>
-        <option value="NEW_PAGE_ID">Thêm Fanpage khác...</option>
+        <option value="" selected>Đang tải danh sách Fanpage...</option>
       </select>
     </div>
   </div>
@@ -250,10 +249,11 @@
     async function doPost() {
       const btn = document.getElementById('post-btn');
       const caption = document.getElementById('caption-text').value;
+      const pageId = document.getElementById('page-select').value;
       if (!caption.trim()) { showToast('Vui lòng tạo caption trước!', 'error'); return; }
       btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:18px;height:18px;border-width:2px;border-top-color:white;display:inline-block"></span> Đang đăng bài...';
       try {
-        const res = await fetch('/api/post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ property: currentProperty, caption }) });
+        const res = await fetch('/api/post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ property: currentProperty, caption, pageId }) });
         const data = await res.json();
         if (data.success) {
           showToast('✅ Đăng bài thành công!', 'success');
@@ -265,10 +265,11 @@
     }
 
     async function loadFBPosts() {
+      const pageId = document.getElementById('page-select').value;
       const list = document.getElementById('fb-posts-list');
       list.innerHTML = '<div class="loading"><span class="spinner"></span>Đang đồng bộ dữ liệu từ Fanpage...</div>';
       try {
-        const res = await fetch('/api/fb-posts');
+        const res = await fetch('/api/fb-posts?pageId=' + pageId);
         const data = await res.json();
         if (!data.data?.length) { list.innerHTML = '<div class="loading"><span style="font-size:3rem;margin-bottom:1rem">📭</span>Chưa có bài đăng nào trên Fanpage</div>'; return; }
         list.innerHTML = data.data.map((post, index) => {
@@ -288,11 +289,12 @@
             imagesHTML = `<div class="fb-post-attachments" style="grid-template-columns: 1fr;"><img class="fb-post-img" src="${mainImg}" style="aspect-ratio: auto; max-height: 500px; width: 100%;"></div>`;
           }
 
+          const pageName = document.getElementById('page-select').options[document.getElementById('page-select').selectedIndex]?.text || 'Fanpage';
           return `<div class="fb-post-card animate-fade-in" style="animation-delay: ${delay}s; animation-fill-mode: both;">
         <div class="fb-post-header">
           <div class="fb-avatar"><img src="https://graph.facebook.com/${document.getElementById('page-select').value}/picture?type=small" onerror="this.src='https://ui-avatars.com/api/?name=J&background=0D8ABC&color=fff'"></div>
           <div class="fb-post-info">
-            <div class="fb-post-name">JoY</div>
+            <div class="fb-post-name">${pageName}</div>
             <div class="fb-post-time">${date}</div>
           </div>
         </div>
@@ -345,19 +347,32 @@
     }
 
     function changePage() {
-      const pageId = document.getElementById('page-select').value;
-      if (pageId === 'NEW_PAGE_ID') {
-        alert('Vui lòng cập nhật FB_PAGE_ID mới trong file .env nhé!');
-        // Revert selection
-        document.getElementById('page-select').selectedIndex = 0;
-        return;
-      }
-      showToast('Đã chuyển sang Page ID: ' + pageId, 'success');
+      const pageName = document.getElementById('page-select').options[document.getElementById('page-select').selectedIndex]?.text;
+      showToast('Đã chuyển sang Page: ' + pageName, 'success');
       if (activeTab === 'fbposts') loadFBPosts();
     }
 
+    async function loadPages() {
+      try {
+        const res = await fetch('/api/pages');
+        const pages = await res.json();
+        const select = document.getElementById('page-select');
+        select.innerHTML = '';
+        pages.forEach((p, idx) => {
+          select.innerHTML += `<option value="${p.id}" ${idx === 0 ? 'selected' : ''}>${p.name}</option>`;
+        });
+      } catch (e) {
+        console.error("Lỗi tải danh sách page:", e);
+      }
+    }
+
+    async function initialize() {
+      await loadPages();
+      await loadProperties();
+    }
+
     // Initial load
-    document.addEventListener('DOMContentLoaded', loadProperties);
+    document.addEventListener('DOMContentLoaded', initialize);
   </script>
 </body>
 
