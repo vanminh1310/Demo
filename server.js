@@ -17,7 +17,6 @@ app.use(express.json());
 app.use(express.static("public"));
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const PAGE_ID = process.env.FB_PAGE_ID;
 const POSTED_FILE = "posted.json";
 
 function getPosted() {
@@ -29,10 +28,14 @@ function savePosted(id) {
   if (!posted.includes(id)) { posted.push(id); fs.writeFileSync(POSTED_FILE, JSON.stringify(posted)); }
 }
 
-async function getPageToken() {
-  const res = await axios.get(`https://graph.facebook.com/v19.0/me/accounts?access_token=${process.env.FB_ACCESS_TOKEN}`);
-  const page = res.data.data.find(p => p.id === PAGE_ID);
-  return page?.access_token || process.env.FB_ACCESS_TOKEN;
+async function getPageToken(pageId) {
+  try {
+    const res = await axios.get(`https://graph.facebook.com/v19.0/me/accounts?access_token=${process.env.FB_ACCESS_TOKEN}`);
+    const page = res.data.data.find(p => p.id === pageId);
+    return page?.access_token || process.env.FB_ACCESS_TOKEN;
+  } catch (err) {
+    return process.env.FB_ACCESS_TOKEN;
+  }
 }
 
 async function generateCaption(property) {
@@ -95,8 +98,9 @@ Mô tả: ${(property.description || "").substring(0, 400)}`
   };
 }
 
-async function uploadAndPost(property, caption) {
-  const pageToken = await getPageToken();
+async function uploadAndPost(property, caption, pageId) {
+  const targetPageId = pageId || process.env.FB_PAGE_ID;
+  const pageToken = await getPageToken(targetPageId);
   const images = (property.images || []).slice(0, 5);
   const mediaIds = [];
   for (const url of images) {
@@ -106,12 +110,12 @@ async function uploadAndPost(property, caption) {
       form.append("source", buf, { filename: "photo.jpg", contentType: "image/jpeg" });
       form.append("published", "false");
       form.append("access_token", pageToken);
-      const res = await axios.post(`https://graph.facebook.com/v19.0/${PAGE_ID}/photos`, form, { headers: form.getHeaders() });
+      const res = await axios.post(`https://graph.facebook.com/v19.0/${targetPageId}/photos`, form, { headers: form.getHeaders() });
       mediaIds.push(res.data.id);
     } catch (e) { console.log("Ảnh lỗi:", e.message); }
   }
   const attached = mediaIds.map(id => ({ media_fbid: id }));
-  const postRes = await axios.post(`https://graph.facebook.com/v19.0/${PAGE_ID}/feed`, {
+  const postRes = await axios.post(`https://graph.facebook.com/v19.0/${targetPageId}/feed`, {
     message: caption,
     attached_media: JSON.stringify(attached),
     access_token: pageToken,
@@ -141,11 +145,22 @@ app.get("/api/pending", async (req, res) => {
   }
 });
 
+// API: Lấy danh sách các Fanpage Admin
+app.get("/api/pages", async (req, res) => {
+  try {
+    const r = await axios.get(`https://graph.facebook.com/v19.0/me/accounts?access_token=${process.env.FB_ACCESS_TOKEN}`);
+    res.json(r.data.data.map(p => ({ id: p.id, name: p.name, category: p.category })));
+  } catch (e) {
+    res.json([{ id: process.env.FB_PAGE_ID, name: "Fanpage Mặc định (Lỗi Graph API)" }]);
+  }
+});
+
 // API: Xem bài đã đăng trên Fanpage
 app.get("/api/fb-posts", async (req, res) => {
   try {
-    const pageToken = await getPageToken();
-    const r = await axios.get(`https://graph.facebook.com/v19.0/${PAGE_ID}/feed?fields=id,message,created_time,full_picture,attachments&limit=20&access_token=${pageToken}`);
+    const targetPageId = req.query.pageId || process.env.FB_PAGE_ID;
+    const pageToken = await getPageToken(targetPageId);
+    const r = await axios.get(`https://graph.facebook.com/v19.0/${targetPageId}/feed?fields=id,message,created_time,full_picture,attachments&limit=20&access_token=${pageToken}`);
     res.json(r.data);
   } catch (e) {
     console.error("FB API Error:", e.response?.data || e.message);
@@ -201,11 +216,12 @@ app.post("/webhook", async (req, res) => {
           const commentId = change.comment_id;
           const senderId = change.from.id;
           const message = change.message;
+          const targetPageId = entry.id; // Lấy ID của trang nhận webhook
 
           // 2. Không được tự Reply chính comment của Fanpage mình (Infinity Loop)
-          if (senderId === process.env.FB_PAGE_ID) return;
+          if (senderId === targetPageId) return;
 
-          console.log(`\n💬 Có Comment mới từ [UID: ${senderId}]: "${message}"`);
+          console.log(`\n💬 Có Comment mới trên Page [${targetPageId}] từ [UID: ${senderId}]: "${message}"`);
 
           try {
             // 3. Dùng AI chém gió và tạo câu trả lời
@@ -223,11 +239,12 @@ app.post("/webhook", async (req, res) => {
             const replyMsg = completion.choices[0].message.content;
             console.log(`🤖 AI Reply: "${replyMsg}"`);
 
+            const pageToken = await getPageToken(targetPageId);
             // 4. Đẩy câu Reply lên Facebook thông qua Graph API (Comment_ID/comments)
             await axios.post(
               `https://graph.facebook.com/v21.0/${commentId}/comments`,
               { message: replyMsg },
-              { params: { access_token: process.env.FB_ACCESS_TOKEN } }
+              { params: { access_token: pageToken } }
             );
             console.log("✅ Đã tự động Reply Comment thành công!");
 
@@ -258,8 +275,8 @@ app.post("/api/preview", async (req, res) => {
 // API: Đăng bài
 app.post("/api/post", async (req, res) => {
   try {
-    const { property, caption } = req.body;
-    const postId = await uploadAndPost(property, caption);
+    const { property, caption, pageId } = req.body;
+    const postId = await uploadAndPost(property, caption, pageId);
     res.json({ success: true, postId });
   } catch (e) { res.status(500).json({ error: e.response?.data?.error?.message || e.message }); }
 });
