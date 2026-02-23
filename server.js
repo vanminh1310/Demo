@@ -148,6 +148,90 @@ app.get("/api/fb-posts", async (req, res) => {
   }
 });
 
+// ==========================================
+// 4. FACEBOOK WEBHOOK (TỰ ĐỘNG REP COMMENT)
+// ==========================================
+
+// 4.1. Webhook Verification (Yêu cầu bắt buộc từ Facebook)
+app.get("/webhook", (req, res) => {
+  const verify_token = process.env.FB_VERIFY_TOKEN;
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode && token) {
+    if (mode === "subscribe" && token === verify_token) {
+      console.log("WEBHOOK_VERIFIED");
+      res.status(200).send(challenge);
+    } else {
+      res.sendStatus(403);
+    }
+  }
+});
+
+// 4.2. Xử lý Comment gửi về từ Webhook
+app.post("/webhook", async (req, res) => {
+  const body = req.body;
+
+  if (body.object === "page") {
+    // Luôn trả về 200 OK ngay lập tức cho FB khỏi bị timeout
+    res.status(200).send("EVENT_RECEIVED");
+
+    body.entry.forEach(async (entry) => {
+      const changes = entry.changes;
+      if (changes && changes[0] && changes[0].value) {
+        const change = changes[0].value;
+
+        // 1. Kiểm tra có đúng là sự kiện có người Comment vào bài viết
+        if (change.item === "comment" && change.verb === "add") {
+          const commentId = change.comment_id;
+          const senderId = change.from.id;
+          const message = change.message;
+
+          // 2. Không được tự Reply chính comment của Fanpage mình (Infinity Loop)
+          if (senderId === process.env.FB_PAGE_ID) return;
+
+          console.log(`\n💬 Có Comment mới từ [UID: ${senderId}]: "${message}"`);
+
+          try {
+            // 3. Dùng AI chém gió và tạo câu trả lời
+            const completion = await groq.chat.completions.create({
+              model: "llama-3.3-70b-versatile",
+              messages: [{
+                role: "system",
+                content: "Bạn là nhân viên tư vấn nhiệt tình của Fanpage cho thuê phòng trọ NovaCity tại TP.HCM. Khách hàng vừa comment hỏi về phòng trọ (có thể là hỏi giá, còn phòng không, inbox). Hãy viết một câu trả lời CỰC KỲ NGẮN GỌN (dưới 3 câu), lịch sự, mời họ check inbox hoặc nhắn tin trực tiếp để trao đổi chi tiết. Không cần chào hỏi dài dòng, đi thẳng vào vấn đề."
+              }, {
+                role: "user",
+                content: `Khách hàng comment: "${message}"`
+              }]
+            });
+
+            const replyMsg = completion.choices[0].message.content;
+            console.log(`🤖 AI Reply: "${replyMsg}"`);
+
+            // 4. Đẩy câu Reply lên Facebook thông qua Graph API (Comment_ID/comments)
+            await axios.post(
+              `https://graph.facebook.com/v21.0/${commentId}/comments`,
+              { message: replyMsg },
+              { params: { access_token: process.env.FB_ACCESS_TOKEN } }
+            );
+            console.log("✅ Đã tự động Reply Comment thành công!");
+
+          } catch (error) {
+            console.error("❌ Lỗi khi Auto Reply:", error.response?.data || error.message);
+          }
+        }
+      }
+    });
+  } else {
+    res.sendStatus(404);
+  }
+});
+
+// ==========================================
+// THIẾT LẬP ROUTE & KHỞI ĐỘNG SERVER
+// ==========================================
+
 // API: Generate caption preview
 app.post("/api/preview", async (req, res) => {
   try {
@@ -164,6 +248,11 @@ app.post("/api/post", async (req, res) => {
     const postId = await uploadAndPost(property, caption);
     res.json({ success: true, postId });
   } catch (e) { res.status(500).json({ error: e.response?.data?.error?.message || e.message }); }
+});
+
+// Serve frontend
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 app.listen(3333, () => console.log("🚀 Dashboard chạy tại http://localhost:3333"));
