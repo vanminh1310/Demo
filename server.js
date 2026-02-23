@@ -90,6 +90,24 @@ async function generateCaption(property) {
 
   const selectedPersona = personas[Math.floor(Math.random() * personas.length)];
 
+  // Xử lý giấu số nhà: Chỉ lấy Tên Đường, Phường, Quận, Thành Phố
+  // Ví dụ: "123/4B Đường Số 1, Phường 4, Quận 8, Hồ Chí Minh" -> "Đường Số 1, Phường 4, Quận 8, Hồ Chí Minh"
+  // Thuật toán: Tách bằng dấu phẩy, nếu phần đầu tiên chứa số (số nhà), cắt bỏ phần chữ số đó đi.
+  let addressFiltered = property.addressFull || "";
+  if (addressFiltered) {
+    let parts = addressFiltered.split(',');
+    // Nếu phần đầu tiên có chứa số (như 123 Lê Lợi)
+    if (parts.length > 0 && /\d/.test(parts[0])) {
+      // Tìm vị trí chữ cái đầu tiên để bỏ phần số nhà đi
+      parts[0] = parts[0].replace(/^[0-9A-Za-z\/\-\s]+(?=[A-ZĐ])/, '').trim();
+    }
+    addressFiltered = parts.join(',').trim();
+    // Đảm bảo luôn có "Quận 8" nếu lỡ bị thiếu
+    if (!addressFiltered.includes("Quận 8") && !addressFiltered.includes("Q8")) {
+      addressFiltered += ", Quận 8";
+    }
+  }
+
   const completion = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     messages: [{
@@ -104,15 +122,15 @@ CẤU TRÚC:
 Dòng 1: Câu mở đầu hấp dẫn phù hợp phong cách
 Dòng 2: 📍 Địa chỉ
 Dòng 3: 💰 Giá + diện tích
-Dòng 4-8: Tiện ích nổi bật với emoji (chỉ dùng thông tin thật)
+Dòng 4-8: Liệt kê các TIỆN ÍCH và PHÍ DỊCH VỤ (điện, nước, rác...). MỖI Ý PHẢI XUỐNG DÒNG RIÊNG BIỆT (bắt đầu bằng emoji phù hợp)
 Dòng 9: Câu tạo cảm giác gấp háp/kêu gọi hành động
 Dòng 10: Inbox ngay / Nhắn tin ngay!
 Dòng 11: 📞 033 234 7879 | Zalo: 033 234 7879
-Dòng cuối: DÁNH SÁCH HASHTAG BẮT ĐẦU BẰNG DẤU # VÀ CÁCH NHAU BẰNG DẤU CÁCH. Bắt buộc phải có hashtag #novacity. (Ví dụ: #novacity #phongtro #chothuephong #phongtrogiare)
+Dòng cuối: DÁNH SÁCH HASHTAG BẮT ĐẦU BẰNG DẤU # VÀ CÁCH NHAU BẰNG DẤU CÁCH. Bắt buộc phải có hashtag #novacity.
 
 THÔNG TIN:
 Tiêu đề: ${property.title}
-Địa chỉ: ${property.addressFull}
+Địa chỉ: ${addressFiltered}
 Giá: ${gia}/tháng | Diện tích: ${property.area}m²
 Mô tả: ${(property.description || "").substring(0, 400)}`
     }]
@@ -175,7 +193,9 @@ app.get("/api/pending", authenticate, async (req, res) => {
 app.get("/api/pages", authenticate, async (req, res) => {
   try {
     const r = await axios.get(`https://graph.facebook.com/v19.0/me/accounts?access_token=${process.env.FB_ACCESS_TOKEN}`);
-    res.json(r.data.data.map(p => ({ id: p.id, name: p.name, category: p.category })));
+    // Ẩn trang JoY theo yêu cầu
+    const filteredPages = r.data.data.filter(p => p.name !== "JoY");
+    res.json(filteredPages.map(p => ({ id: p.id, name: p.name, category: p.category })));
   } catch (e) {
     res.json([{ id: process.env.FB_PAGE_ID, name: "Fanpage Mặc định (Lỗi Graph API)" }]);
   }
@@ -288,6 +308,24 @@ app.post("/webhook", async (req, res) => {
 // ==========================================
 // THIẾT LẬP ROUTE & KHỞI ĐỘNG SERVER
 // ==========================================
+
+// Bấm vào đường link này để Tự tạo tài khoản Admin
+app.get("/api/setup", async (req, res) => {
+  try {
+    const un = process.env.NV_USERNAME || 'admin';
+    const pw = process.env.NV_PASSWORD || 'admin1234@123';
+
+    // Xóa admin cũ (nếu có bị kẹt lỗi)
+    await User.deleteMany({ username: un });
+
+    // Tạo lại admin mới
+    await User.create({ username: un, password: pw });
+
+    res.send(`<h1>Tạo thành công!</h1><p>Tài khoản: <b>${un}</b></p><p>Mật khẩu: <b>${pw}</b></p><br><a href="/">Bấm vào đây để Quay lại màn hình Đăng Nhập</a>`);
+  } catch (e) {
+    res.send("Lỗi: " + e.message);
+  }
+});
 
 // API: Generate caption preview
 app.post("/api/preview", authenticate, async (req, res) => {
