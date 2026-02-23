@@ -255,38 +255,123 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Serve Privacy Policy (bắt buộc cho Facebook App Live Mode)
+// ==========================================
+// COMPLIANCE PAGES FOR FACEBOOK APP REVIEW
+// ==========================================
+
+const commonStyles = `
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+    h1 { color: #2563eb; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+    h2 { color: #1e40af; margin-top: 30px; }
+    p { margin-bottom: 15px; }
+    ul, ol { margin-bottom: 20px; }
+    li { margin-bottom: 8px; }
+    .container { background: #fff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 30px; border: 1px solid #f3f4f6; }
+  </style>
+`;
+
+// Serve Privacy Policy
 app.get("/privacy-policy", (req, res) => {
   res.send(`
-    <h1>Chính sách bảo mật (Privacy Policy)</h1>
-    <p>Ứng dụng NovaCity Auto-post cam kết bảo vệ quyền riêng tư của bạn.</p>
-    <p>Chúng tôi chỉ thu thập và sử dụng thông tin từ Fanpage Facebook (bình luận, bài viết) nhằm mục đích hỗ trợ tự động hóa việc đăng bài và trả lời khách hàng theo đúng chức năng mà bạn đã cấp quyền.</p>
-    <p>Chúng tôi cam kết KHÔNG bán, chia sẻ hoặc lạm dụng dữ liệu của bạn cho bất kỳ bên thứ ba nào khác ngoài việc phục vụ cho AI xử lý ngôn ngữ tự nhiên (Groq/Llama).</p>
-    <p>Nếu bạn muốn xóa dữ liệu, vui lòng gỡ ứng dụng khỏi Fanpage của bạn trong phần Cài đặt Facebook.</p>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Privacy Policy - NovaCity Auto-post</title>
+      ${commonStyles}
+    </head>
+    <body>
+      <div class="container">
+        <h1>Privacy Policy</h1>
+        <p><strong>Last Updated:</strong> February 2026</p>
+        <p>NovaCity Auto-post ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy outlines how we collect, use, and safeguard the information associated with our Facebook App integration.</p>
+        
+        <h2>1. Information We Collect</h2>
+        <p>We access data from your connected Facebook Page (including public posts and user comments) strictly for the purpose of operating the automated posting and auto-reply functionalities you have explicitly authorized.</p>
+        
+        <h2>2. How We Use Your Information</h2>
+        <p>The collected data is processed in real-time by our integrated Artificial Intelligence (AI) services solely to generate contextual responses and captions. We do not use this data for marketing, profiling, or any other unauthorized purposes.</p>
+        
+        <h2>3. Data Sharing and Disclosure</h2>
+        <p>We do not sell, trade, or otherwise transfer your identifiable data to outside parties. Data is only transmitted securely via API to our AI processing partners (e.g., Groq) for the immediate generation of content, and it is not retained or used to train their models.</p>
+        
+        <h2>4. Data Retention</h2>
+        <p>We do not permanently store personal data or user comments on our servers. Information is held only momentarily during the AI generation process.</p>
+        
+        <h2>5. Contact Us</h2>
+        <p>If you have any questions regarding this Privacy Policy, please contact us via our official fanpage.</p>
+      </div>
+    </body>
+    </html>
   `);
 });
 
-// Serve Terms of Service (Điều khoản dịch vụ)
+// Serve Terms of Service
 app.get("/terms-of-service", (req, res) => {
   res.send(`
-    <h1>Điều khoản dịch vụ (Terms of Service)</h1>
-    <p>Bằng việc sử dụng ứng dụng NovaCity Auto-post, bạn đồng ý cấp quyền cho ứng dụng thực hiện các tác vụ tự động trên Fanpage của bạn, bao gồm đăng bài và trả lời bình luận.</p>
-    <p>Ứng dụng được cung cấp "như nguyên trạng" và phục vụ mục đích nội bộ.</p>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Terms of Service - NovaCity Auto-post</title>
+      ${commonStyles}
+    </head>
+    <body>
+      <div class="container">
+        <h1>Terms of Service</h1>
+        <p><strong>Last Updated:</strong> February 2026</p>
+        
+        <h2>1. Acceptance of Terms</h2>
+        <p>By accessing and using the NovaCity Auto-post application, you agree to be bound by these Terms of Service. If you do not agree with any part of these terms, you must not use our service.</p>
+        
+        <h2>2. Service Description</h2>
+        <p>NovaCity Auto-post is an automated tool designed to assist Page administrators in publishing property listings and automatically generating AI-driven replies to user comments on their connected Facebook Pages.</p>
+        
+        <h2>3. User Responsibilities</h2>
+        <p>You authorize NovaCity Auto-post to act on your behalf to manage page content and engage with users. You are solely responsible for ensuring that the automated content does not violate Facebook's Community Standards or Terms of Service.</p>
+        
+        <h2>4. Disclaimer of Warranties</h2>
+        <p>The service is provided on an "as is" and "as available" basis. We make no warranties, expressed or implied, regarding the reliability, accuracy, or uninterrupted operation of the AI generation or the Facebook Graph API integration.</p>
+        
+        <h2>5. Limitation of Liability</h2>
+        <p>In no event shall NovaCity Auto-post be liable for any indirect, incidental, special, or consequential damages arising out of the use or inability to use the service, including account suspension by Facebook.</p>
+      </div>
+    </body>
+    </html>
   `);
 });
 
-// Serve Data Deletion Instructions (Hướng dẫn xóa dữ liệu)
+// Serve Data Deletion Instructions
 app.get("/data-deletion", (req, res) => {
   res.send(`
-    <h1>Hướng dẫn xóa dữ liệu (Data Deletion Instructions)</h1>
-    <p>NovaCity Auto-post không lưu trữ dữ liệu cá nhân của người dùng trên máy chủ của chúng tôi. Các dữ liệu bình luận chỉ được truyền qua AI để tạo câu trả lời và không bị lưu trữ vĩnh viễn.</p>
-    <p>Để xóa toàn bộ quyền truy cập và dữ liệu liên quan đến ứng dụng này khỏi tài khoản của bạn, vui lòng thực hiện các bước sau:</p>
-    <ol>
-      <li>Truy cập vào tài khoản Facebook cá nhân của bạn.</li>
-      <li>Vào phần <b>Cài đặt & quyền riêng tư (Settings & Privacy)</b> > <b>Cài đặt (Settings)</b>.</li>
-      <li>Tìm mục <b>Bảo mật và đăng nhập</b> hoặc <b>Tiện ích tích hợp cho doanh nghiệp (Business Integrations)</b>.</li>
-      <li>Tìm ứng dụng <b>NovaCity bot</b> trong danh sách, chọn và bấm <b>Gỡ (Remove)</b>.</li>
-    </ol>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Data Deletion Instructions - NovaCity Auto-post</title>
+      ${commonStyles}
+    </head>
+    <body>
+      <div class="container">
+        <h1>Data Deletion Instructions</h1>
+        <p>NovaCity Auto-post values your privacy and ensures that user data is handled securely. Because we do not persistently store personal data or comment history on our servers, there is no centralized database holding your information.</p>
+        
+        <h2>Removing Access and Associated Data</h2>
+        <p>If you wish to revoke our application's access and ensure no further data is processed, you must remove the app integration from your Facebook account. Please follow these steps:</p>
+        <ol>
+          <li>Log in to your Facebook account.</li>
+          <li>Navigate to the top right menu and select <strong>Settings & Privacy</strong>, then click on <strong>Settings</strong>.</li>
+          <li>In the left sidebar, click on <strong>Security and Login</strong> or scroll down to find <strong>Business Integrations</strong> (or <strong>Apps and Websites</strong>).</li>
+          <li>Locate the <strong>NovaCity Auto-post</strong> (or your custom App name) in the list of active integrations.</li>
+          <li>Click the <strong>Remove</strong> button next to the application.</li>
+          <li>Confirm your choice in the dialog box.</li>
+        </ol>
+        
+        <p>Upon completing these steps, the application will immediately lose access to your Facebook Page, and no further automated actions or data processing will occur.</p>
+      </div>
+    </body>
+    </html>
   `);
 });
 
