@@ -91,19 +91,25 @@ async function generateCaption(property) {
 
   const selectedPersona = personas[Math.floor(Math.random() * personas.length)];
 
-  // Xử lý giấu số nhà: Chỉ lấy Tên Đường, Phường, Quận, Thành Phố
-  // Ví dụ: "123/4B Đường Số 1, Phường 4, Quận 8, Hồ Chí Minh" -> "Đường Số 1, Phường 4, Quận 8, Hồ Chí Minh"
-  // Thuật toán: Tách bằng dấu phẩy, nếu phần đầu tiên chứa số (số nhà), cắt bỏ phần chữ số đó đi.
+  // Xử lý giấu số nhà: Chỉ giữ Tên Đường, Phường, Quận
+  // VD: "35 đường số 5, Phường 4, Quận 8, HCM" -> "Đường số 5, Phường 4, Quận 8"
   let addressFiltered = property.addressFull || "";
   if (addressFiltered) {
-    let parts = addressFiltered.split(',');
-    // Nếu phần đầu tiên có chứa số (như 123 Lê Lợi)
-    if (parts.length > 0 && /\d/.test(parts[0])) {
-      // Tìm vị trí chữ cái đầu tiên để bỏ phần số nhà đi
-      parts[0] = parts[0].replace(/^[0-9A-Za-z\/\-\s]+(?=[A-ZĐ])/, '').trim();
+    let parts = addressFiltered.split(',').map(s => s.trim());
+    // Phần đầu tiên thường là "SốNhà TênĐường" -> bỏ số nhà
+    if (parts.length > 0) {
+      // Bỏ tất cả số + ký tự đặc biệt ở đầu (số nhà, ngõ, hẻm...)
+      // VD: "35 đường số 5" -> "đường số 5"
+      // VD: "123/4B Lê Lợi" -> "Lê Lợi"
+      // VD: "12A/3 Nguyễn Văn A" -> "Nguyễn Văn A"
+      parts[0] = parts[0].replace(/^[\d\s\/\\.\-A-Za-z]*?(?=\s*(?:đường|Đường|hẻm|Hẻm|ngõ|Ngõ|phố|Phố|[A-ZĐÀÁẢÃẠ]))/i, '').trim();
+      // Nếu vẫn bắt đầu bằng số sau khi lọc, cắt cứng phần số đầu
+      parts[0] = parts[0].replace(/^\d[\d\/\\\-A-Za-z]*\s*/, '').trim();
     }
-    addressFiltered = parts.join(',').trim();
-    // Đảm bảo luôn có "Quận 8" nếu lỡ bị thiếu
+    // Bỏ phần "Hồ Chí Minh", "TP.HCM" ở cuối (không cần thiết)
+    parts = parts.filter(p => !/(Hồ Chí Minh|TP\.?HCM|Thành phố|Ho Chi Minh)/i.test(p));
+    addressFiltered = parts.filter(p => p.length > 0).join(', ').trim();
+    // Đảm bảo luôn có "Quận 8"
     if (!addressFiltered.includes("Quận 8") && !addressFiltered.includes("Q8")) {
       addressFiltered += ", Quận 8";
     }
@@ -121,7 +127,7 @@ NHIỆM VỤ: Viết bài đăng Facebook cho thuê phòng trọ theo đúng pho
 
 CẤU TRÚC:
 Dòng 1: Câu mở đầu hấp dẫn phù hợp phong cách
-Dòng 2: 📍 Địa chỉ
+Dòng 2: 📍 Địa chỉ (CHỈ ghi tên đường + phường + quận, TUYỆT ĐỐI KHÔNG ghi số nhà vì lý do bảo mật)
 Dòng 3: 💰 Giá + diện tích
 Dòng 4-8: Liệt kê các TIỆN ÍCH và PHÍ DỊCH VỤ (điện, nước, rác...). MỖI Ý PHẢI XUỐNG DÒNG RIÊNG BIỆT (bắt đầu bằng emoji phù hợp)
 Dòng 9: Câu tạo cảm giác gấp háp/kêu gọi hành động
