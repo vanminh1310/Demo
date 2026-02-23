@@ -88,11 +88,13 @@
           spellcheck="false"></textarea>
       </div>
       <div class="modal-footer">
+        <select class="card-btn" id="modal-page-select"
+          style="flex:1; background: #f8fafc; color: #334155; border: 1px solid #e2e8f0; margin-right: 8px; font-weight: 500; font-family: inherit; font-size: 0.9rem; cursor: pointer;"></select>
         <button class="card-btn btn-outline" onclick="regenerate()" style="flex:1" id="regen-btn">
           <span>🔄</span> Tạo lại
         </button>
         <button class="card-btn" onclick="doPost()" style="flex:2" id="post-btn">
-          <span>📤</span> Đăng ngay lên Fanpage
+          <span>📤</span> Đăng lên Fanpage
         </button>
       </div>
     </div>
@@ -199,6 +201,12 @@
 
     async function openModal(property) {
       currentProperty = property;
+
+      const mainSelect = document.getElementById('page-select');
+      const modalSelect = document.getElementById('modal-page-select');
+      modalSelect.innerHTML = mainSelect.innerHTML;
+      modalSelect.value = mainSelect.value;
+
       document.getElementById('modal-property-info').innerHTML = `
     <div style="font-weight:700; color:var(--primary); margin-bottom:0.25rem;">${property.title}</div>
     <div style="display:flex; gap:1rem; opacity:0.8; font-size:0.9rem;">
@@ -249,7 +257,7 @@
     async function doPost() {
       const btn = document.getElementById('post-btn');
       const caption = document.getElementById('caption-text').value;
-      const pageId = document.getElementById('page-select').value;
+      const pageId = document.getElementById('modal-page-select').value;
       if (!caption.trim()) { showToast('Vui lòng tạo caption trước!', 'error'); return; }
       btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:18px;height:18px;border-width:2px;border-top-color:white;display:inline-block"></span> Đang đăng bài...';
       try {
