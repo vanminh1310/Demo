@@ -266,4 +266,28 @@ app.get("/privacy-policy", (req, res) => {
   `);
 });
 
+// Serve Terms of Service (Điều khoản dịch vụ)
+app.get("/terms-of-service", (req, res) => {
+  res.send(`
+    <h1>Điều khoản dịch vụ (Terms of Service)</h1>
+    <p>Bằng việc sử dụng ứng dụng NovaCity Auto-post, bạn đồng ý cấp quyền cho ứng dụng thực hiện các tác vụ tự động trên Fanpage của bạn, bao gồm đăng bài và trả lời bình luận.</p>
+    <p>Ứng dụng được cung cấp "như nguyên trạng" và phục vụ mục đích nội bộ.</p>
+  `);
+});
+
+// Serve Data Deletion Instructions (Hướng dẫn xóa dữ liệu)
+app.get("/data-deletion", (req, res) => {
+  res.send(`
+    <h1>Hướng dẫn xóa dữ liệu (Data Deletion Instructions)</h1>
+    <p>NovaCity Auto-post không lưu trữ dữ liệu cá nhân của người dùng trên máy chủ của chúng tôi. Các dữ liệu bình luận chỉ được truyền qua AI để tạo câu trả lời và không bị lưu trữ vĩnh viễn.</p>
+    <p>Để xóa toàn bộ quyền truy cập và dữ liệu liên quan đến ứng dụng này khỏi tài khoản của bạn, vui lòng thực hiện các bước sau:</p>
+    <ol>
+      <li>Truy cập vào tài khoản Facebook cá nhân của bạn.</li>
+      <li>Vào phần <b>Cài đặt & quyền riêng tư (Settings & Privacy)</b> > <b>Cài đặt (Settings)</b>.</li>
+      <li>Tìm mục <b>Bảo mật và đăng nhập</b> hoặc <b>Tiện ích tích hợp cho doanh nghiệp (Business Integrations)</b>.</li>
+      <li>Tìm ứng dụng <b>NovaCity bot</b> trong danh sách, chọn và bấm <b>Gỡ (Remove)</b>.</li>
+    </ol>
+  `);
+});
+
 app.listen(3333, () => console.log("🚀 Dashboard chạy tại http://localhost:3333"));
