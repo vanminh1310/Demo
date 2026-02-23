@@ -166,6 +166,20 @@
       const badgeText = isPosted ? '<span>✅</span> Đã đăng' : '<span>⏳</span> Chờ đăng';
       const btn = isPosted ? '' : `<button class="card-btn" onclick='openModal(${JSON.stringify(p).replace(/'/g, "&#39;")})'><span>🤖</span> AI Tạo & Đăng</button>`;
 
+      let timeHtml = '';
+      if (isPosted && p.postedAt) {
+        const d = new Date(p.postedAt);
+        const timeStr = d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        timeHtml = `<div style="font-size: 0.8rem; color: #64748b; margin-top: 5px;">🕰️ Đã đăng: ${timeStr}</div>`;
+      }
+
+      let addressHtml = '<span>📍 Chưa cập nhật</span>';
+      if (p.addressFull) {
+        const shortAddr = p.addressFull.split(',').slice(-2).join(', ');
+        const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.addressFull)}`;
+        addressHtml = `<a href="${mapUrl}" target="_blank" style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 4px;"><span style="color:var(--primary)">📍</span> ${shortAddr} <span style="font-size:0.7em;opacity:0.6">↗</span></a>`;
+      }
+
       return `<div class="card animate-fade-in" style="animation-delay: ${delay}s; animation-fill-mode: both;">
     <div class="card-image-wrapper">
       ${img}
@@ -175,9 +189,10 @@
       <div class="card-price">💰 ${formatPrice(p.priceTotal)}</div>
       <div class="card-title">${p.title}</div>
       <div class="card-info">
-        <span>📍 ${p.addressFull ? p.addressFull.split(',').slice(-2).join(', ') : 'Chưa cập nhật'}</span>
+        ${addressHtml}
         <span>📐 ${p.area || '?'}m²</span>
       </div>
+      ${timeHtml}
       ${btn}
     </div>
   </div>`;
