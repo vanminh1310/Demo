@@ -63,7 +63,9 @@
 
     <!-- Tab: Posted -->
     <div id="tab-posted" style="display:none">
-      <div id="posted-grid" class="grid"></div>
+      <div id="posted-grid" class="grid">
+        <div class="loading"><span class="spinner"></span>Đang tải danh sách bài đã đăng...</div>
+      </div>
     </div>
 
     <!-- Tab: FB Posts -->
@@ -154,10 +156,55 @@
     }
 
     function renderPosted() {
-      const posted = allProperties.filter(p => p.posted);
+      // Stub - Đã chuyển sang loadPostedItems()
+    }
+
+    async function loadPostedItems() {
       const grid = document.getElementById('posted-grid');
-      if (!posted.length) { grid.innerHTML = '<div class="loading"><span style="font-size:3rem;margin-bottom:1rem">📭</span>Chưa có phòng nào được đăng</div>'; return; }
-      grid.innerHTML = posted.map((p, index) => cardHTML(p, true, index)).join('');
+      grid.innerHTML = '<div class="loading"><span class="spinner"></span>Đang tải danh sách bài đã đăng...</div>';
+      try {
+        const res = await fetch('/api/posted');
+        const items = await res.json();
+        if (!items.length) {
+          grid.innerHTML = '<div class="loading"><span style="font-size:3rem;margin-bottom:1rem">📭</span>Chưa có bài nào được đăng</div>';
+          return;
+        }
+        grid.innerHTML = items.map((item, index) => {
+          const delay = Math.min(index * 0.05, 0.5);
+          const date = new Date(item.postedAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          const captionPreview = (item.caption || '').substring(0, 120) + (item.caption?.length > 120 ? '...' : '');
+          const imgHtml = item.picture
+            ? `<img src="${item.picture}" style="width:100%;height:180px;object-fit:cover;border-radius:12px 12px 0 0;">`
+            : `<div style="height:120px;background:linear-gradient(135deg,#4F46E5,#7C3AED);display:flex;align-items:center;justify-content:center;border-radius:12px 12px 0 0;font-size:2.5rem;">📰</div>`;
+
+          const fbLink = item.postId ? `https://facebook.com/${item.postId}` : '#';
+
+          return `<div class="card animate-fade-in" style="animation-delay:${delay}s;animation-fill-mode:both;">
+            <div class="card-image-wrapper">${imgHtml}
+              <span class="card-badge badge-posted"><span>✅</span> Đã đăng</span>
+            </div>
+            <div class="card-content">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;">
+                  ${item.pageName?.charAt(0) || 'F'}
+                </div>
+                <div>
+                  <div style="font-weight:600;font-size:0.85rem;color:#1E293B;">${item.pageName}</div>
+                  <div style="font-size:0.75rem;color:#94A3B8;">${date}</div>
+                </div>
+              </div>
+              <div style="font-size:0.85rem;color:#475569;line-height:1.4;margin-bottom:10px;min-height:40px;">${captionPreview}</div>
+              <div style="display:flex;gap:12px;padding:8px 0;border-top:1px solid #F1F5F9;">
+                <div style="display:flex;align-items:center;gap:4px;font-size:0.85rem;color:#64748B;">👍 <b style="color:#1E293B">${item.likes}</b></div>
+                <div style="display:flex;align-items:center;gap:4px;font-size:0.85rem;color:#64748B;">💬 <b style="color:#1E293B">${item.comments}</b></div>
+                <a href="${fbLink}" target="_blank" style="margin-left:auto;font-size:0.8rem;color:var(--primary);text-decoration:none;font-weight:600;">Xem trên FB ↗</a>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        grid.innerHTML = '<div class="loading">❌ Lỗi: ' + e.message + '</div>';
+      }
     }
 
     function cardHTML(p, isPosted, index) {
@@ -335,6 +382,7 @@
       content.classList.add('animate-slide-up');
 
       if (tab === 'fbposts') loadFBPosts();
+      if (tab === 'posted') loadPostedItems();
     }
 
     function showToast(msg, type) {

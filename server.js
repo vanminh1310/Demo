@@ -50,8 +50,8 @@ async function getPosted() {
   const docs = await PostedProperty.find({});
   return docs.map(d => d.propertyId);
 }
-async function savePosted(id) {
-  try { await PostedProperty.create({ propertyId: id }); } catch (e) { }
+async function savePosted(data) {
+  try { await PostedProperty.create(data); } catch (e) { }
 }
 
 async function getPageToken(pageId) {
@@ -164,7 +164,22 @@ async function uploadAndPost(property, caption, pageId) {
     attached_media: JSON.stringify(attached),
     access_token: pageToken,
   });
-  await savePosted(property.id);
+
+  // Lấy tên Page
+  let pageName = 'Fanpage';
+  try {
+    const pagesRes = await axios.get(`https://graph.facebook.com/v19.0/me/accounts?access_token=${process.env.FB_ACCESS_TOKEN}`);
+    const pg = pagesRes.data.data.find(p => p.id === targetPageId);
+    if (pg) pageName = pg.name;
+  } catch (e) { }
+
+  await savePosted({
+    propertyId: property.id,
+    postId: postRes.data.id,
+    pageId: targetPageId,
+    pageName: pageName,
+    caption: caption
+  });
   return postRes.data.id;
 }
 
@@ -186,6 +201,45 @@ app.get("/api/pending", authenticate, async (req, res) => {
     console.error("NovaCity API Error:", e.response?.data || e.message);
     // Trả về dữ liệu trống thay vì lỗi 500 để giao diện không bị vỡ
     res.json({ properties: [], postedCount: getPosted().length, error: "NovaCity API đang bận, vui lòng thử lại sau" });
+  }
+});
+
+// API: Lấy danh sách phòng ĐÃ ĐĂNG kèm thống kê từ Facebook
+app.get("/api/posted", authenticate, async (req, res) => {
+  try {
+    const docs = await PostedProperty.find({}).sort({ postedAt: -1 });
+    const results = [];
+
+    for (const doc of docs) {
+      let fbStats = { likes: 0, comments: 0 };
+
+      // Lấy thống kê từ Facebook nếu có postId
+      if (doc.postId && doc.pageId) {
+        try {
+          const pageToken = await getPageToken(doc.pageId);
+          const fbRes = await axios.get(`https://graph.facebook.com/v19.0/${doc.postId}?fields=likes.summary(true),comments.summary(true),full_picture&access_token=${pageToken}`);
+          fbStats.likes = fbRes.data?.likes?.summary?.total_count || 0;
+          fbStats.comments = fbRes.data?.comments?.summary?.total_count || 0;
+          fbStats.picture = fbRes.data?.full_picture || null;
+        } catch (e) { }
+      }
+
+      results.push({
+        propertyId: doc.propertyId,
+        postId: doc.postId,
+        pageId: doc.pageId,
+        pageName: doc.pageName || 'N/A',
+        caption: doc.caption || '',
+        postedAt: doc.postedAt,
+        likes: fbStats.likes,
+        comments: fbStats.comments,
+        picture: fbStats.picture
+      });
+    }
+
+    res.json(results);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
