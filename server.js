@@ -6,8 +6,13 @@ const fs = require("fs");
 const FormData = require("form-data");
 const path = require("path");
 const { addWatermark } = require("./watermark");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
 app.use(express.json());
 app.use(express.static("public"));
 
@@ -172,6 +177,15 @@ app.get("/webhook", (req, res) => {
 // 4.2. Xử lý Comment gửi về từ Webhook
 app.post("/webhook", async (req, res) => {
   const body = req.body;
+
+  // 🔴 DEBUG LOG: In ra toàn bộ webhook FB gửi về & Phát qua Socket cho trang Debug
+  console.log("====================================");
+  console.log("🔔 [WEBHOOK EVENT RECEIVED]");
+  console.log(JSON.stringify(body, null, 2));
+  console.log("====================================");
+
+  // Phát tín hiệu Realtime cho tất cả các tab /debug đang mở
+  io.emit('webhook_event', body);
 
   if (body.object === "page") {
     // Luôn trả về 200 OK ngay lập tức cho FB khỏi bị timeout
@@ -375,4 +389,55 @@ app.get("/data-deletion", (req, res) => {
   `);
 });
 
-app.listen(3333, () => console.log("🚀 Dashboard chạy tại http://localhost:3333"));
+// ==========================================
+// THÊM TRANG DEBUG REALTIME CHO WEBHOOK
+// ==========================================
+app.get("/debug", (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="UTF-8">
+      <title>🟢 Webhook Real-time Debugger</title>
+      <style>
+        body { background: #0f172a; color: #00ff00; font-family: 'Courier New', Courier, monospace; padding: 20px; margin: 0; }
+        h1 { border-bottom: 2px solid #334155; padding-bottom: 10px; margin-top: 0; }
+        .log-entry { margin-bottom: 15px; padding: 10px; background: #1e293b; border-radius: 4px; border-left: 4px solid #3b82f6; white-space: pre-wrap; word-break: break-all; }
+        .timestamp { color: #94a3b8; font-size: 0.85em; margin-bottom: 5px; }
+      </style>
+    </head>
+    <body>
+      <h1>🟢 Đang nghe tín hiệu Webhook từ Facebook...</h1>
+      <div id="logs">Mở app Facebook và thử comment để xem tín hiệu nhảy vào đây nhé! (Cần phải chờ FB duyệt App thì khách lạ comment mới nhảy)</div>
+      
+      <script src="/socket.io/socket.io.js"></script>
+      <script>
+        const socket = io();
+        const logsDiv = document.getElementById('logs');
+        let isFirst = true;
+        
+        socket.on('webhook_event', (data) => {
+          if (isFirst) { logsDiv.innerHTML = ''; isFirst = false; }
+          
+          const entry = document.createElement('div');
+          entry.className = 'log-entry';
+          
+          const time = new Date().toLocaleTimeString('vi-VN');
+          const ts = document.createElement('div');
+          ts.className = 'timestamp';
+          ts.innerText = '[' + time + '] NHẬN ĐƯỢC TÍN HIỆU:';
+          
+          const content = document.createElement('div');
+          content.innerText = JSON.stringify(data, null, 2);
+          
+          entry.appendChild(ts);
+          entry.appendChild(content);
+          logsDiv.prepend(entry); // Thêm lên đầu danh sách
+        });
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+server.listen(3333, () => console.log("🚀 Dashboard chạy tại http://localhost:3333"));
