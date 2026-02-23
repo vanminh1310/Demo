@@ -31,6 +31,9 @@
         onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626';this.style.borderColor='#DC2626'"
         onmouseout="this.style.background='none';this.style.color='#64748B';this.style.borderColor='#E2E8F0'">🚪 Đăng
         xuất</button>
+      <button onclick="toggleDarkMode()" id="dark-toggle"
+        style="background:none;border:1px solid #E2E8F0;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:1rem;transition:all 0.2s;"
+        title="Dark Mode">🌙</button>
     </div>
   </div>
 
@@ -39,6 +42,8 @@
       <div class="tab active" onclick="showTab('pending')"><span>📋</span> Chờ đăng</div>
       <div class="tab" onclick="showTab('posted')"><span>✅</span> Đã đăng</div>
       <div class="tab" onclick="showTab('fbposts')"><span>📘</span> Fanpage</div>
+      <div class="tab" onclick="showTab('analytics')"><span>📊</span> Thống kê</div>
+      <div class="tab" onclick="showTab('schedule')"><span>⏰</span> Hẹn giờ</div>
     </div>
   </div>
 
@@ -86,6 +91,34 @@
         <div class="loading"><span class="spinner"></span>Đang tải bài đăng...</div>
       </div>
     </div>
+
+    <!-- Tab: Analytics -->
+    <div id="tab-analytics" style="display:none">
+      <div id="analytics-content">
+        <div class="loading"><span class="spinner"></span>Đang tải thống kê...</div>
+      </div>
+    </div>
+
+    <!-- Tab: Schedule -->
+    <div id="tab-schedule" style="display:none">
+      <div id="schedule-content">
+        <div class="loading"><span class="spinner"></span>Đang tải danh sách hẹn giờ...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Action Bar -->
+  <div id="bulk-bar"
+    style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--primary);color:white;padding:12px 24px;z-index:999;box-shadow:0 -4px 20px rgba(0,0,0,0.2);display:none;align-items:center;justify-content:space-between;font-family:inherit;">
+    <span id="bulk-count">Đã chọn 0 phòng</span>
+    <div style="display:flex;gap:8px;">
+      <button onclick="clearBulk()"
+        style="background:rgba(255,255,255,0.2);border:none;color:white;padding:8px 16px;border-radius:8px;cursor:pointer;font-family:inherit;">❌
+        Hủy</button>
+      <button onclick="doBulkPost()"
+        style="background:white;color:var(--primary);border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-weight:700;font-family:inherit;">🚀
+        Đăng hàng loạt</button>
+    </div>
   </div>
 
   <!-- Modal Preview Caption -->
@@ -104,11 +137,14 @@
       <div class="modal-footer">
         <select class="card-btn" id="modal-page-select"
           style="flex:1; background: #f8fafc; color: #334155; border: 1px solid #e2e8f0; margin-right: 8px; font-weight: 500; font-family: inherit; font-size: 0.9rem; cursor: pointer;"></select>
-        <button class="card-btn btn-outline" onclick="regenerate()" style="flex:1" id="regen-btn">
+        <button class="card-btn btn-outline" onclick="regenerate()" style="flex:0.8" id="regen-btn">
           <span>🔄</span> Tạo lại
         </button>
-        <button class="card-btn" onclick="doPost()" style="flex:2" id="post-btn">
-          <span>📤</span> Đăng lên Fanpage
+        <button class="card-btn" onclick="doPost()" style="flex:1.5" id="post-btn">
+          <span>📤</span> Đăng ngay
+        </button>
+        <button class="card-btn" onclick="openScheduleModal()" style="flex:1; background:#F59E0B;" id="schedule-btn">
+          <span>⏰</span> Hẹn giờ
         </button>
       </div>
     </div>
@@ -118,6 +154,7 @@
     let allProperties = [];
     let currentProperty = null;
     let activeTab = 'pending';
+    let bulkSelected = [];
 
     async function loadProperties() {
       try {
@@ -290,7 +327,7 @@
       const img = p.images?.[0] ? `<img class="card-image" src="${p.images[0]}" loading="lazy" alt="Property Header">` : `<div style="height:100%;background:linear-gradient(135deg, #1e293b, #0f172a);display:flex;align-items:center;justify-content:center;font-size:3rem;color:white;opacity:0.8">🏠</div>`;
       const badgeClass = isPosted ? 'badge-posted' : 'badge-pending';
       const badgeText = isPosted ? '<span>✅</span> Đã đăng' : '<span>⏳</span> Chờ đăng';
-      const btn = isPosted ? '' : `<button class="card-btn" onclick='openModal(${JSON.stringify(p).replace(/'/g, "&#39;")})'><span>🤖</span> AI Tạo & Đăng</button>`;
+      const btn = isPosted ? '' : `<div style="display:flex;gap:8px;align-items:center;"><label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.8rem;color:#64748B;"><input type="checkbox" class="bulk-cb" id="cb-${p.id}" onchange="toggleBulk('${p.id}')" style="width:16px;height:16px;cursor:pointer;">Chọn</label><button class="card-btn" style="flex:1;" onclick='openModal(${JSON.stringify(p).replace(/'/g, "&#39;")})'><span>🤖</span> AI Tạo & Đăng</button></div>`;
 
       let timeHtml = '';
       if (isPosted && p.postedAt) {
@@ -461,6 +498,8 @@
 
       if (tab === 'fbposts') loadFBPosts();
       if (tab === 'posted') loadPostedItems();
+      if (tab === 'analytics') loadAnalytics();
+      if (tab === 'schedule') loadSchedule();
     }
 
     function showToast(msg, type) {
@@ -525,7 +564,172 @@
       grid.innerHTML = filtered.map((p, index) => cardHTML(p, false, index)).join('');
     }
 
+    // ==========================================
+    // DARK MODE
+    // ==========================================
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+      const isDark = document.body.classList.contains('dark-mode');
+      document.getElementById('dark-toggle').textContent = isDark ? '☀️' : '🌙';
+      localStorage.setItem('darkMode', isDark);
+    }
+
+    // ==========================================
+    // ANALYTICS
+    // ==========================================
+    async function loadAnalytics() {
+      const el = document.getElementById('analytics-content');
+      el.innerHTML = '<div class="loading"><span class="spinner"></span>Đang tải thống kê...</div>';
+      try {
+        const res = await fetch('/api/analytics');
+        const data = await res.json();
+        el.innerHTML = `
+          <div class="stats-grid" style="margin-bottom:24px;">
+            <div class="stat-card"><span class="stat-label">Tổng bài đăng</span><span class="stat-value" style="color:var(--primary)">${data.totalPosts}</span></div>
+            <div class="stat-card"><span class="stat-label">Tổng Likes</span><span class="stat-value" style="color:#F59E0B">👍 ${data.totalLikes}</span></div>
+            <div class="stat-card"><span class="stat-label">Tổng Comments</span><span class="stat-value" style="color:#10B981">💬 ${data.totalComments}</span></div>
+            <div class="stat-card"><span class="stat-label">Đang hẹn giờ</span><span class="stat-value" style="color:#8B5CF6">⏰ ${data.scheduledCount}</span></div>
+          </div>
+          <h3 style="margin-bottom:12px;color:var(--text);">📘 Thống kê theo Fanpage</h3>
+          <div style="display:grid;gap:12px;">
+            ${data.pageStats.map(p => `
+              <div style="background:var(--card-bg,white);border-radius:12px;padding:16px;border:1px solid var(--border,#E2E8F0);display:flex;align-items:center;gap:16px;">
+                <div style="width:40px;height:40px;border-radius:50%;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;">${p.name.charAt(0)}</div>
+                <div style="flex:1;">
+                  <div style="font-weight:600;color:var(--text);">${p.name}</div>
+                  <div style="font-size:0.85rem;color:#64748B;">${p.count} bài đăng</div>
+                </div>
+                <div style="display:flex;gap:16px;font-size:0.9rem;">
+                  <span>👍 ${p.likes}</span><span>💬 ${p.comments}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>`;
+      } catch (e) { el.innerHTML = '<div class="loading">❌ ' + e.message + '</div>'; }
+    }
+
+    // ==========================================
+    // SCHEDULE
+    // ==========================================
+    function openScheduleModal() {
+      const dt = prompt('⏰ Nhập ngày giờ hẹn đăng (VD: 2026-02-24 09:00):');
+      if (!dt) return;
+      const scheduledAt = new Date(dt);
+      if (isNaN(scheduledAt.getTime())) { showToast('Ngày giờ không hợp lệ!', 'error'); return; }
+      if (scheduledAt <= new Date()) { showToast('Phải chọn thời gian trong tương lai!', 'error'); return; }
+
+      const caption = document.getElementById('caption-text').value;
+      const pageId = document.getElementById('modal-page-select').value;
+      if (!caption.trim()) { showToast('Vui lòng tạo caption trước!', 'error'); return; }
+
+      schedulePost(currentProperty, caption, pageId, scheduledAt);
+    }
+
+    async function schedulePost(property, caption, pageId, scheduledAt) {
+      try {
+        const res = await fetch('/api/schedule', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ property, caption, pageId, scheduledAt: scheduledAt.toISOString() })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('⏰ Đã hẹn giờ: ' + scheduledAt.toLocaleString('vi-VN'), 'success');
+          closeModal();
+        } else { showToast('❌ ' + data.error, 'error'); }
+      } catch (e) { showToast('❌ ' + e.message, 'error'); }
+    }
+
+    async function loadSchedule() {
+      const el = document.getElementById('schedule-content');
+      el.innerHTML = '<div class="loading"><span class="spinner"></span>Đang tải...</div>';
+      try {
+        const res = await fetch('/api/schedule');
+        const items = await res.json();
+        if (!items.length) { el.innerHTML = '<div class="loading"><span style="font-size:3rem;margin-bottom:1rem">📭</span>Chưa có bài nào được hẹn giờ</div>'; return; }
+        el.innerHTML = '<div style="display:grid;gap:12px;">' + items.map(item => {
+          const time = new Date(item.scheduledAt).toLocaleString('vi-VN');
+          const statusColor = item.status === 'posted' ? '#10B981' : item.status === 'failed' ? '#EF4444' : '#F59E0B';
+          const statusText = item.status === 'posted' ? '✅ Đã đăng' : item.status === 'failed' ? '❌ Thất bại' : '⏳ Đang chờ';
+          const cancelBtn = item.status === 'pending' ? `<button onclick="cancelSchedule('${item._id}')" style="background:#EF4444;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:0.8rem;">🗑️ Hủy</button>` : '';
+          return `<div style="background:var(--card-bg,white);border-radius:12px;padding:16px;border:1px solid var(--border,#E2E8F0);display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;">
+              <div style="font-weight:600;color:var(--text);">${item.pageName || 'Fanpage'}</div>
+              <div style="font-size:0.85rem;color:#64748B;">⏰ ${time}</div>
+              <div style="font-size:0.8rem;color:#94A3B8;margin-top:4px;">${(item.caption || '').substring(0, 80)}...</div>
+            </div>
+            <span style="background:${statusColor};color:white;padding:4px 10px;border-radius:99px;font-size:0.75rem;font-weight:600;">${statusText}</span>
+            ${cancelBtn}
+          </div>`;
+        }).join('') + '</div>';
+      } catch (e) { el.innerHTML = '<div class="loading">❌ ' + e.message + '</div>'; }
+    }
+
+    async function cancelSchedule(id) {
+      if (!confirm('Hủy bài hẹn giờ này?')) return;
+      try {
+        await fetch('/api/schedule/' + id, { method: 'DELETE' });
+        showToast('Đã hủy hẹn giờ', 'success');
+        loadSchedule();
+      } catch (e) { showToast('❌ ' + e.message, 'error'); }
+    }
+
+    // ==========================================
+    // BULK POST
+    // ==========================================
+    function toggleBulk(propertyId) {
+      const idx = bulkSelected.indexOf(propertyId);
+      if (idx > -1) bulkSelected.splice(idx, 1);
+      else bulkSelected.push(propertyId);
+
+      const bar = document.getElementById('bulk-bar');
+      if (bulkSelected.length > 0) {
+        bar.style.display = 'flex';
+        document.getElementById('bulk-count').textContent = 'Đã chọn ' + bulkSelected.length + ' phòng';
+      } else {
+        bar.style.display = 'none';
+      }
+      // Toggle checkbox visual
+      const cb = document.getElementById('cb-' + propertyId);
+      if (cb) cb.checked = idx === -1;
+    }
+
+    function clearBulk() {
+      bulkSelected = [];
+      document.getElementById('bulk-bar').style.display = 'none';
+      document.querySelectorAll('.bulk-cb').forEach(cb => cb.checked = false);
+    }
+
+    async function doBulkPost() {
+      if (!bulkSelected.length) return;
+      const pageId = document.getElementById('page-select').value;
+      if (!confirm(`Đăng ${bulkSelected.length} phòng lên Fanpage?\nAI sẽ tự tạo caption cho từng phòng.`)) return;
+
+      showToast('🚀 Đang đăng hàng loạt...', 'success');
+      const items = [];
+      for (const id of bulkSelected) {
+        const prop = allProperties.find(p => String(p.id) === String(id));
+        if (!prop) continue;
+        try {
+          const res = await fetch('/api/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ property: prop }) });
+          const data = await res.json();
+          items.push({ property: prop, caption: data.caption, pageId });
+        } catch (e) { items.push({ property: prop, caption: prop.title, pageId }); }
+      }
+
+      try {
+        const res = await fetch('/api/bulk-post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
+        const data = await res.json();
+        showToast(`✅ Đã đăng ${data.success}/${data.total} bài thành công!`, 'success');
+        clearBulk();
+        loadProperties();
+      } catch (e) { showToast('❌ ' + e.message, 'error'); }
+    }
+
     async function initialize() {
+      if (localStorage.getItem('darkMode') === 'true') {
+        document.body.classList.add('dark-mode');
+        document.getElementById('dark-toggle').textContent = '☀️';
+      }
       await loadPages();
       await loadProperties();
     }
@@ -533,6 +737,74 @@
     // Initial load
     document.addEventListener('DOMContentLoaded', initialize);
   </script>
+
+  <style>
+    .dark-mode {
+      --bg: #0F172A;
+      --card-bg: #1E293B;
+      --text: #E2E8F0;
+      --border: #334155;
+    }
+
+    .dark-mode body,
+    .dark-mode {
+      background: var(--bg) !important;
+      color: var(--text) !important;
+    }
+
+    .dark-mode .header {
+      background: linear-gradient(135deg, #1E293B, #0F172A) !important;
+    }
+
+    .dark-mode .stat-card,
+    .dark-mode .card {
+      background: var(--card-bg) !important;
+      border-color: var(--border) !important;
+    }
+
+    .dark-mode .card-title,
+    .dark-mode .stat-label {
+      color: #94A3B8 !important;
+    }
+
+    .dark-mode .tab {
+      color: #94A3B8 !important;
+    }
+
+    .dark-mode .tab.active {
+      color: var(--primary) !important;
+    }
+
+    .dark-mode .modal {
+      background: var(--card-bg) !important;
+    }
+
+    .dark-mode .caption-box {
+      background: #0F172A !important;
+      color: var(--text) !important;
+      border-color: var(--border) !important;
+    }
+
+    .dark-mode .container {
+      background: transparent !important;
+    }
+
+    .dark-mode input,
+    .dark-mode select {
+      background: #0F172A !important;
+      color: var(--text) !important;
+      border-color: var(--border) !important;
+    }
+
+    .dark-mode .fb-post-card {
+      background: var(--card-bg) !important;
+      border-color: var(--border) !important;
+    }
+
+    .dark-mode .nav-container {
+      background: var(--card-bg) !important;
+    }
+  </style>
 </body>
 
 </html>

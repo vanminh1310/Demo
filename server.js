@@ -13,6 +13,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const User = require("./models/User");
 const PostedProperty = require("./models/PostedProperty");
+const ScheduledPost = require("./models/ScheduledPost");
 
 const app = express();
 const server = http.createServer(app);
@@ -321,6 +322,100 @@ app.get("/api/fb-posts", authenticate, async (req, res) => {
     console.error("FB API Error:", e.response?.data || e.message);
     res.status(500).json({ error: e.response?.data?.error?.message || e.message });
   }
+});
+
+// ==========================================
+// SCHEDULE, BULK POST, ANALYTICS
+// ==========================================
+
+// API: Hẹn giờ đăng bài
+app.post("/api/schedule", authenticate, async (req, res) => {
+  try {
+    const { property, caption, pageId, scheduledAt } = req.body;
+    let pageName = 'Fanpage';
+    try {
+      const pagesRes = await axios.get(`https://graph.facebook.com/v19.0/me/accounts?access_token=${process.env.FB_ACCESS_TOKEN}`);
+      const pg = pagesRes.data.data.find(p => p.id === pageId);
+      if (pg) pageName = pg.name;
+    } catch (e) { }
+
+    await ScheduledPost.create({
+      propertyId: String(property.id),
+      property, caption, pageId, pageName,
+      scheduledAt: new Date(scheduledAt)
+    });
+    res.json({ success: true, message: 'Đã hẹn giờ thành công!' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// API: Danh sách bài hẹn giờ
+app.get("/api/schedule", authenticate, async (req, res) => {
+  try {
+    const items = await ScheduledPost.find({}).sort({ scheduledAt: 1 });
+    res.json(items);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// API: Hủy bài hẹn giờ
+app.delete("/api/schedule/:id", authenticate, async (req, res) => {
+  try {
+    await ScheduledPost.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// API: Đăng hàng loạt
+app.post("/api/bulk-post", authenticate, async (req, res) => {
+  try {
+    const { items } = req.body; // [{property, caption, pageId}]
+    const results = [];
+    for (const item of items) {
+      try {
+        const postId = await uploadAndPost(item.property, item.caption, item.pageId);
+        results.push({ propertyId: item.property.id, success: true, postId });
+      } catch (e) {
+        results.push({ propertyId: item.property.id, success: false, error: e.message });
+      }
+    }
+    res.json({ results, total: items.length, success: results.filter(r => r.success).length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// API: Thống kê tổng hợp
+app.get("/api/analytics", authenticate, async (req, res) => {
+  try {
+    const docs = await PostedProperty.find({});
+    let totalLikes = 0, totalComments = 0;
+    const pageStats = {};
+
+    for (const doc of docs) {
+      const pName = doc.pageName || 'N/A';
+      if (!pageStats[pName]) pageStats[pName] = { count: 0, likes: 0, comments: 0 };
+      pageStats[pName].count++;
+
+      if (doc.postId && doc.pageId) {
+        try {
+          const pageToken = await getPageToken(doc.pageId);
+          const fbRes = await axios.get(`https://graph.facebook.com/v19.0/${doc.postId}?fields=likes.summary(true),comments.summary(true)&access_token=${pageToken}`);
+          const likes = fbRes.data?.likes?.summary?.total_count || 0;
+          const comments = fbRes.data?.comments?.summary?.total_count || 0;
+          totalLikes += likes;
+          totalComments += comments;
+          pageStats[pName].likes += likes;
+          pageStats[pName].comments += comments;
+        } catch (e) { }
+      }
+    }
+
+    const scheduled = await ScheduledPost.countDocuments({ status: 'pending' });
+
+    res.json({
+      totalPosts: docs.length,
+      totalLikes, totalComments,
+      scheduledCount: scheduled,
+      pageStats: Object.entries(pageStats).map(([name, s]) => ({ name, ...s }))
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ==========================================
@@ -651,4 +746,28 @@ app.get("/debug", (req, res) => {
   `);
 });
 
-server.listen(3333, () => console.log("🚀 Dashboard chạy tại http://localhost:3333"));
+server.listen(3333, () => {
+  console.log("🚀 Dashboard chạy tại http://localhost:3333");
+
+  // Scheduler: Kiểm tra bài hẹn giờ mỗi 30 giây
+  setInterval(async () => {
+    try {
+      const now = new Date();
+      const pendingPosts = await ScheduledPost.find({ status: 'pending', scheduledAt: { $lte: now } });
+      for (const sp of pendingPosts) {
+        try {
+          console.log(`⏰ Đang đăng bài hẹn giờ: ${sp.propertyId}`);
+          await uploadAndPost(sp.property, sp.caption, sp.pageId);
+          sp.status = 'posted';
+          await sp.save();
+          console.log(`✅ Đã đăng bài hẹn giờ thành công!`);
+        } catch (e) {
+          sp.status = 'failed';
+          sp.error = e.message;
+          await sp.save();
+          console.log(`❌ Lỗi đăng bài hẹn giờ:`, e.message);
+        }
+      }
+    } catch (e) { }
+  }, 30000);
+});
