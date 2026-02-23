@@ -92,24 +92,20 @@ async function generateCaption(property) {
   const selectedPersona = personas[Math.floor(Math.random() * personas.length)];
 
   // Xử lý giấu số nhà: Chỉ giữ Tên Đường, Phường, Quận
-  // VD: "35 đường số 5, Phường 4, Quận 8, HCM" -> "Đường số 5, Phường 4, Quận 8"
+  // "35 đường số 5, Phường 4, Quận 8, HCM" -> "đường số 5, Phường 4, Quận 8"
   let addressFiltered = property.addressFull || "";
   if (addressFiltered) {
     let parts = addressFiltered.split(',').map(s => s.trim());
-    // Phần đầu tiên thường là "SốNhà TênĐường" -> bỏ số nhà
     if (parts.length > 0) {
-      // Bỏ tất cả số + ký tự đặc biệt ở đầu (số nhà, ngõ, hẻm...)
-      // VD: "35 đường số 5" -> "đường số 5"
-      // VD: "123/4B Lê Lợi" -> "Lê Lợi"
-      // VD: "12A/3 Nguyễn Văn A" -> "Nguyễn Văn A"
-      parts[0] = parts[0].replace(/^[\d\s\/\\.\-A-Za-z]*?(?=\s*(?:đường|Đường|hẻm|Hẻm|ngõ|Ngõ|phố|Phố|[A-ZĐÀÁẢÃẠ]))/i, '').trim();
-      // Nếu vẫn bắt đầu bằng số sau khi lọc, cắt cứng phần số đầu
-      parts[0] = parts[0].replace(/^\d[\d\/\\\-A-Za-z]*\s*/, '').trim();
+      // Cắt số nhà: xóa phần số + ký tự liền kề ở đầu chuỗi
+      // "35 đường số 5" -> "đường số 5"
+      // "123/4B Lê Lợi" -> "Lê Lợi"  
+      // "12A-3 Nguyễn Văn A" -> "Nguyễn Văn A"
+      parts[0] = parts[0].replace(/^\d[\d\/\\\-A-Za-z.]*\s*/, '').trim();
     }
-    // Bỏ phần "Hồ Chí Minh", "TP.HCM" ở cuối (không cần thiết)
-    parts = parts.filter(p => !/(Hồ Chí Minh|TP\.?HCM|Thành phố|Ho Chi Minh)/i.test(p));
+    // Bỏ "Hồ Chí Minh" / "TP.HCM"
+    parts = parts.filter(p => !/(Hồ Chí Minh|TP\.?HCM|Ho Chi Minh)/i.test(p));
     addressFiltered = parts.filter(p => p.length > 0).join(', ').trim();
-    // Đảm bảo luôn có "Quận 8"
     if (!addressFiltered.includes("Quận 8") && !addressFiltered.includes("Q8")) {
       addressFiltered += ", Quận 8";
     }
