@@ -71,10 +71,10 @@ Dòng 1: Câu mở đầu hấp dẫn phù hợp phong cách
 Dòng 2: 📍 Địa chỉ
 Dòng 3: 💰 Giá + diện tích
 Dòng 4-8: Tiện ích nổi bật với emoji (chỉ dùng thông tin thật)
-Dòng 9: Câu tạo cảm giác gấp gáp/kêu gọi hành động
+Dòng 9: Câu tạo cảm giác gấp háp/kêu gọi hành động
 Dòng 10: Inbox ngay / Nhắn tin ngay!
 Dòng 11: 📞 033 234 7879 | Zalo: 033 234 7879
-Dòng cuối: 15-20 hashtag liền không dấu
+Dòng cuối: DÁNH SÁCH HASHTAG BẮT ĐẦU BẰNG DẤU # VÀ CÁCH NHAU BẰNG DẤU CÁCH. Bắt buộc phải có hashtag #novacity. (Ví dụ: #novacity #phongtro #chothuephong #phongtrogiare)
 
 THÔNG TIN:
 Tiêu đề: ${property.title}

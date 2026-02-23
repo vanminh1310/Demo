@@ -81,7 +81,7 @@ Dòng 4-8: Liệt kê tiện ích nổi bật (áp dụng văn phong của yêu 
 Dòng 9: Câu chốt hạ tạo cảm giác hấp dẫn/gấp gáp
 Dòng 10: CTA: Nhắn tin hoặc inbox xem phòng
 Dòng 11: 📞 033 234 7879 | Zalo: 033 234 7879
-Dòng cuối: 15-20 hashtag liền không dấu, có cả từ khóa tìm kiếm và từ khóa cảm xúc.
+Dòng cuối: DANH SÁCH HASHTAG BẮT ĐẦU BẰNG DẤU # VÀ CÁCH NHAU BẰNG DẤU CÁCH. Bắt buộc phải có hashtag #novacity. (Ví dụ: #novacity #phongtro #chothuephong #phongtrogiare)
 
 THÔNG TIN PHÒNG (Sử dụng chính xác):
 Tiêu đề: ${property.title}
@@ -91,7 +91,6 @@ Chi tiết thực tế: ${(property.description || "").substring(0, 400)}
 
 YÊU CẦU BẮT BUỘC:
 - KHÔNG dùng markup in đậm (**) hay tiêu đề (##).
-- Mọi hashtag viết liền chuẩn Facebook, không có khoảng trắng ở giữa.
 - Độ dài khoảng 180-250 chữ (không kể hashtag).`
     }]
   });
@@ -103,7 +102,7 @@ async function uploadPhoto(imageUrl, pageToken) {
   try {
     // Thêm watermark vào ảnh
     const watermarkedBuffer = await addWatermark(imageUrl);
-    
+
     // Upload buffer lên Facebook
     const form = new FormData();
     form.append("source", watermarkedBuffer, { filename: "photo.jpg", contentType: "image/jpeg" });
