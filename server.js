@@ -243,6 +243,61 @@ app.get("/api/posted", authenticate, async (req, res) => {
   }
 });
 
+// API: Xóa bài đăng (xóa trên FB + xóa trong DB)
+app.delete("/api/posted/:propertyId", authenticate, async (req, res) => {
+  try {
+    const doc = await PostedProperty.findOne({ propertyId: req.params.propertyId });
+    if (!doc) return res.status(404).json({ error: "Không tìm thấy bài đăng" });
+
+    // Xóa bài trên Facebook nếu có postId
+    if (doc.postId && doc.pageId) {
+      try {
+        const pageToken = await getPageToken(doc.pageId);
+        await axios.delete(`https://graph.facebook.com/v19.0/${doc.postId}?access_token=${pageToken}`);
+        console.log(`🗑️ Đã xóa bài FB: ${doc.postId}`);
+      } catch (e) {
+        console.log("⚠️ Không xóa được bài trên FB:", e.response?.data?.error?.message || e.message);
+      }
+    }
+
+    // Xóa trong Database
+    await PostedProperty.deleteOne({ propertyId: req.params.propertyId });
+    res.json({ success: true, message: "Đã xóa bài đăng" });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// API: Sửa caption bài đăng (cập nhật trên FB + DB)
+app.put("/api/posted/:propertyId", authenticate, async (req, res) => {
+  try {
+    const { caption } = req.body;
+    const doc = await PostedProperty.findOne({ propertyId: req.params.propertyId });
+    if (!doc) return res.status(404).json({ error: "Không tìm thấy bài đăng" });
+
+    // Cập nhật trên Facebook
+    if (doc.postId && doc.pageId) {
+      try {
+        const pageToken = await getPageToken(doc.pageId);
+        await axios.post(`https://graph.facebook.com/v19.0/${doc.postId}`, {
+          message: caption,
+          access_token: pageToken
+        });
+        console.log(`✏️ Đã cập nhật caption FB: ${doc.postId}`);
+      } catch (e) {
+        console.log("⚠️ Không sửa được trên FB:", e.response?.data?.error?.message || e.message);
+      }
+    }
+
+    // Cập nhật trong Database
+    doc.caption = caption;
+    await doc.save();
+    res.json({ success: true, message: "Đã cập nhật bài đăng" });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // API: Lấy danh sách các Fanpage Admin
 app.get("/api/pages", authenticate, async (req, res) => {
   try {

@@ -199,12 +199,80 @@
                 <div style="display:flex;align-items:center;gap:4px;font-size:0.85rem;color:#64748B;">💬 <b style="color:#1E293B">${item.comments}</b></div>
                 <a href="${fbLink}" target="_blank" style="margin-left:auto;font-size:0.8rem;color:var(--primary);text-decoration:none;font-weight:600;">Xem trên FB ↗</a>
               </div>
+              <div style="display:flex;gap:8px;margin-top:10px;">
+                <button class="card-btn btn-outline" onclick="editPost('${item.propertyId}')" style="flex:1;padding:8px;font-size:0.8rem;">
+                  <span>✏️</span> Sửa
+                </button>
+                <button class="card-btn" onclick="deletePost('${item.propertyId}')" style="flex:1;padding:8px;font-size:0.8rem;background:#EF4444;">
+                  <span>🗑️</span> Xóa
+                </button>
+              </div>
             </div>
           </div>`;
         }).join('');
       } catch (e) {
         grid.innerHTML = '<div class="loading">❌ Lỗi: ' + e.message + '</div>';
       }
+    }
+
+    async function deletePost(propertyId) {
+      if (!confirm('⚠️ Bạn có chắc muốn XÓA bài đăng này?\n\nBài viết sẽ bị xóa trên cả Facebook và Database!')) return;
+      try {
+        const res = await fetch('/api/posted/' + propertyId, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('🗑️ Đã xóa bài đăng!', 'success');
+          loadPostedItems();
+          loadProperties();
+        } else { showToast('❌ ' + data.error, 'error'); }
+      } catch (e) { showToast('❌ ' + e.message, 'error'); }
+    }
+
+    async function editPost(propertyId) {
+      try {
+        const res = await fetch('/api/posted');
+        const items = await res.json();
+        const item = items.find(i => i.propertyId === propertyId);
+        if (!item) { showToast('Không tìm thấy bài đăng', 'error'); return; }
+
+        document.getElementById('modal').classList.add('show');
+        document.getElementById('modal-property-info').innerHTML = `
+          <div style="font-weight:700; color:var(--primary); margin-bottom:0.25rem;">✏️ Chỉnh sửa bài đăng</div>
+          <div style="display:flex; gap:1rem; opacity:0.8; font-size:0.9rem;">
+            <span>📘 ${item.pageName}</span>
+            <span>🕑 ${new Date(item.postedAt).toLocaleString('vi-VN')}</span>
+          </div>`;
+        document.getElementById('caption-text').value = item.caption || '';
+        document.getElementById('ai-persona-badge')?.remove();
+
+        const footer = document.querySelector('.modal-footer');
+        footer.dataset.editOriginal = footer.innerHTML;
+        footer.innerHTML = `
+          <button class="card-btn btn-outline" onclick="cancelEdit()" style="flex:1"><span>❌</span> Hủy</button>
+          <button class="card-btn" onclick="saveEdit('${propertyId}')" style="flex:2" id="save-edit-btn"><span>💾</span> Lưu thay đổi</button>`;
+      } catch (e) { showToast('❌ ' + e.message, 'error'); }
+    }
+
+    async function saveEdit(propertyId) {
+      const btn = document.getElementById('save-edit-btn');
+      const caption = document.getElementById('caption-text').value;
+      if (!caption.trim()) { showToast('Caption không được trống!', 'error'); return; }
+      btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block"></span> Đang lưu...';
+      try {
+        const res = await fetch('/api/posted/' + propertyId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption }) });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ Cập nhật thành công!', 'success');
+          cancelEdit(); closeModal(); loadPostedItems();
+        } else { showToast('❌ ' + data.error, 'error'); }
+      } catch (e) { showToast('❌ ' + e.message, 'error'); }
+      btn.disabled = false; btn.innerHTML = '<span>💾</span> Lưu thay đổi';
+    }
+
+    function cancelEdit() {
+      const footer = document.querySelector('.modal-footer');
+      if (footer.dataset.editOriginal) { footer.innerHTML = footer.dataset.editOriginal; delete footer.dataset.editOriginal; }
+      closeModal();
     }
 
     function cardHTML(p, isPosted, index) {
