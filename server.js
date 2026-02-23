@@ -2,30 +2,56 @@ require("dotenv").config();
 const express = require("express");
 const Groq = require("groq-sdk");
 const axios = require("axios");
-const fs = require("fs");
 const FormData = require("form-data");
 const path = require("path");
+const mongoose = require("mongoose");
+const cookieParser = require("cookie-parser");
+const jwt = require("jsonwebtoken");
+
 const { addWatermark } = require("./watermark");
 const http = require("http");
 const { Server } = require("socket.io");
+const User = require("./models/User");
+const PostedProperty = require("./models/PostedProperty");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.json());
-app.use(express.static("public"));
+app.use(cookieParser());
+app.use(express.static("public", { index: false }));
+
+mongoose.connect(process.env.MONGODB_URI).then(async () => {
+  console.log("✅ MongoDB connected!");
+  const count = await User.countDocuments();
+  if (count === 0) {
+    const un = process.env.NV_USERNAME || 'admin';
+    const pw = process.env.NV_PASSWORD || 'admin1234';
+    await User.create({ username: un, password: pw });
+    console.log(`🔑 Default admin created (${un} / ${pw})`);
+  }
+}).catch(console.error);
+
+const authenticate = (req, res, next) => {
+  const token = req.cookies.auth_token;
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+  try {
+    jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch (err) {
+    res.status(401).json({ error: "Invalid Token" });
+  }
+};
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const POSTED_FILE = "posted.json";
 
-function getPosted() {
-  if (!fs.existsSync(POSTED_FILE)) return [];
-  return JSON.parse(fs.readFileSync(POSTED_FILE));
+async function getPosted() {
+  const docs = await PostedProperty.find({});
+  return docs.map(d => d.propertyId);
 }
-function savePosted(id) {
-  const posted = getPosted();
-  if (!posted.includes(id)) { posted.push(id); fs.writeFileSync(POSTED_FILE, JSON.stringify(posted)); }
+async function savePosted(id) {
+  try { await PostedProperty.create({ propertyId: id }); } catch (e) { }
 }
 
 async function getPageToken(pageId) {
@@ -120,14 +146,14 @@ async function uploadAndPost(property, caption, pageId) {
     attached_media: JSON.stringify(attached),
     access_token: pageToken,
   });
-  savePosted(property.id);
+  await savePosted(property.id);
   return postRes.data.id;
 }
 
 // API: Lấy danh sách phòng chưa đăng
-app.get("/api/pending", async (req, res) => {
+app.get("/api/pending", authenticate, async (req, res) => {
   try {
-    const posted = getPosted();
+    const posted = await getPosted();
     console.log("🔍 Fetching properties from NovaCity API...");
     const r = await axios.get(`${process.env.NOVACITY_API}?status=AVAILABLE&limit=100`, { timeout: 30000 });
     const props = (r.data.properties || []).map(p => ({
@@ -146,7 +172,7 @@ app.get("/api/pending", async (req, res) => {
 });
 
 // API: Lấy danh sách các Fanpage Admin
-app.get("/api/pages", async (req, res) => {
+app.get("/api/pages", authenticate, async (req, res) => {
   try {
     const r = await axios.get(`https://graph.facebook.com/v19.0/me/accounts?access_token=${process.env.FB_ACCESS_TOKEN}`);
     res.json(r.data.data.map(p => ({ id: p.id, name: p.name, category: p.category })));
@@ -156,7 +182,7 @@ app.get("/api/pages", async (req, res) => {
 });
 
 // API: Xem bài đã đăng trên Fanpage
-app.get("/api/fb-posts", async (req, res) => {
+app.get("/api/fb-posts", authenticate, async (req, res) => {
   try {
     const targetPageId = req.query.pageId || process.env.FB_PAGE_ID;
     const pageToken = await getPageToken(targetPageId);
@@ -264,7 +290,7 @@ app.post("/webhook", async (req, res) => {
 // ==========================================
 
 // API: Generate caption preview
-app.post("/api/preview", async (req, res) => {
+app.post("/api/preview", authenticate, async (req, res) => {
   try {
     const { property } = req.body;
     const result = await generateCaption(property);
@@ -273,7 +299,7 @@ app.post("/api/preview", async (req, res) => {
 });
 
 // API: Đăng bài
-app.post("/api/post", async (req, res) => {
+app.post("/api/post", authenticate, async (req, res) => {
   try {
     const { property, caption, pageId } = req.body;
     const postId = await uploadAndPost(property, caption, pageId);
@@ -281,9 +307,30 @@ app.post("/api/post", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.response?.data?.error?.message || e.message }); }
 });
 
+// API: Đăng nhập
+app.post("/api/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = await User.findOne({ username });
+    if (user && await user.comparePassword(password)) {
+      const token = jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: '7d' });
+      res.cookie('auth_token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+      res.json({ success: true });
+    } else {
+      res.status(401).json({ error: "Tài khoản hoặc mật khẩu không đúng!" });
+    }
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Serve frontend
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  const token = req.cookies.auth_token;
+  try {
+    if (token && jwt.verify(token, process.env.JWT_SECRET)) {
+      return res.sendFile(path.join(__dirname, "views", "dashboard.html"));
+    }
+  } catch (e) { }
+  res.sendFile(path.join(__dirname, "views", "login.html"));
 });
 
 // ==========================================
