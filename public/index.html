@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NovaCity Premium Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+
+<body>
+
+  <div class="header">
+    <div class="header-brand">
+      <img src="https://novacity.vn/logo.png" alt="Logo"
+        style="height: 36px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"
+        onerror="this.style.display='none'">
+      <h1>NOVACITY</h1>
+    </div>
+
+    <div class="page-manager">
+      <div class="page-status"></div>
+      <select id="page-select" onchange="changePage()">
+        <option value="108854017400465" selected>JoY - Căn hộ/Phòng trọ</option>
+        <option value="NEW_PAGE_ID">Thêm Fanpage khác...</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="nav-container animate-fade-in">
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('pending')"><span>📋</span> Chờ đăng</div>
+      <div class="tab" onclick="showTab('posted')"><span>✅</span> Đã đăng</div>
+      <div class="tab" onclick="showTab('fbposts')"><span>📘</span> Fanpage</div>
+    </div>
+  </div>
+
+  <div class="container animate-slide-up">
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Tổng phòng</span>
+        <span class="stat-value" id="totalCount" style="color: var(--primary)">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Chờ đăng</span>
+        <span class="stat-value" id="pendingCount" style="color: var(--warning)">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Đã đăng</span>
+        <span class="stat-value" id="postedCount" style="color: var(--success)">—</span>
+      </div>
+    </div>
+
+    <!-- Tab: Pending -->
+    <div id="tab-pending">
+      <div id="pending-grid" class="grid">
+        <div class="loading"><span class="spinner"></span>Đang tải danh sách phòng...</div>
+      </div>
+    </div>
+
+    <!-- Tab: Posted -->
+    <div id="tab-posted" style="display:none">
+      <div id="posted-grid" class="grid"></div>
+    </div>
+
+    <!-- Tab: FB Posts -->
+    <div id="tab-fbposts" style="display:none">
+      <div id="fb-posts-list">
+        <div class="loading"><span class="spinner"></span>Đang tải bài đăng...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Preview Caption -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>✨ Xem trước bài đăng</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-property-info"></div>
+        <label class="caption-label">📝 Nội dung bài viết</label>
+        <textarea class="caption-box" id="caption-text" placeholder="AI đang soạn nội dung..."
+          spellcheck="false"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="card-btn btn-outline" onclick="regenerate()" style="flex:1" id="regen-btn">
+          <span>🔄</span> Tạo lại
+        </button>
+        <button class="card-btn" onclick="doPost()" style="flex:2" id="post-btn">
+          <span>📤</span> Đăng ngay lên Fanpage
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allProperties = [];
+    let currentProperty = null;
+    let activeTab = 'pending';
+
+    async function loadProperties() {
+      try {
+        const res = await fetch('/api/pending');
+        const data = await res.json();
+        if (data.error) {
+          showToast('❌ Lỗi server: ' + data.error, 'error');
+          return;
+        }
+        allProperties = data.properties || [];
+        animateValue("totalCount", 0, allProperties.length, 1000);
+        animateValue("pendingCount", 0, allProperties.filter(p => !p.posted).length, 1000);
+        animateValue("postedCount", 0, data.postedCount || 0, 1000);
+        renderPending();
+        renderPosted();
+      } catch (e) {
+        showToast('❌ Lỗi kết nối: ' + e.message, 'error');
+      }
+    }
+
+    function animateValue(id, start, end, duration) {
+      if (start === end) return;
+      let obj = document.getElementById(id);
+      let range = end - start;
+      let current = start;
+      let increment = end > start ? 1 : -1;
+      let stepTime = Math.abs(Math.floor(duration / range));
+
+      if (stepTime < 10) stepTime = 10;
+
+      let timer = setInterval(function () {
+        current += increment;
+        obj.innerHTML = current;
+        if (current == end) clearInterval(timer);
+      }, stepTime);
+    }
+
+    function formatPrice(price) {
+      const n = Number(price);
+      return n >= 1000000 ? (n / 1000000).toFixed(1) + ' triệu/tháng' : price + ' triệu/tháng';
+    }
+
+    function renderPending() {
+      const pending = allProperties.filter(p => !p.posted);
+      const grid = document.getElementById('pending-grid');
+      if (!pending.length) { grid.innerHTML = '<div class="loading"><span style="font-size:3rem;margin-bottom:1rem">🎉</span>Tất cả phòng đã được đăng!</div>'; return; }
+      grid.innerHTML = pending.map((p, index) => cardHTML(p, false, index)).join('');
+    }
+
+    function renderPosted() {
+      const posted = allProperties.filter(p => p.posted);
+      const grid = document.getElementById('posted-grid');
+      if (!posted.length) { grid.innerHTML = '<div class="loading"><span style="font-size:3rem;margin-bottom:1rem">📭</span>Chưa có phòng nào được đăng</div>'; return; }
+      grid.innerHTML = posted.map((p, index) => cardHTML(p, true, index)).join('');
+    }
+
+    function cardHTML(p, isPosted, index) {
+      const delay = Math.min(index * 0.05, 0.5); // Staggered animation delay
+      const img = p.images?.[0] ? `<img class="card-image" src="${p.images[0]}" loading="lazy" alt="Property Header">` : `<div style="height:100%;background:linear-gradient(135deg, #1e293b, #0f172a);display:flex;align-items:center;justify-content:center;font-size:3rem;color:white;opacity:0.8">🏠</div>`;
+      const badgeClass = isPosted ? 'badge-posted' : 'badge-pending';
+      const badgeText = isPosted ? '<span>✅</span> Đã đăng' : '<span>⏳</span> Chờ đăng';
+      const btn = isPosted ? '' : `<button class="card-btn" onclick='openModal(${JSON.stringify(p).replace(/'/g, "&#39;")})'><span>🤖</span> AI Tạo & Đăng</button>`;
+
+      return `<div class="card animate-fade-in" style="animation-delay: ${delay}s; animation-fill-mode: both;">
+    <div class="card-image-wrapper">
+      ${img}
+      <span class="card-badge ${badgeClass}">${badgeText}</span>
+    </div>
+    <div class="card-content">
+      <div class="card-price">💰 ${formatPrice(p.priceTotal)}</div>
+      <div class="card-title">${p.title}</div>
+      <div class="card-info">
+        <span>📍 ${p.addressFull ? p.addressFull.split(',').slice(-2).join(', ') : 'Chưa cập nhật'}</span>
+        <span>📐 ${p.area || '?'}m²</span>
+      </div>
+      ${btn}
+    </div>
+  </div>`;
+    }
+
+    async function openModal(property) {
+      currentProperty = property;
+      document.getElementById('modal-property-info').innerHTML = `
+    <div style="font-weight:700; color:var(--primary); margin-bottom:0.25rem;">${property.title}</div>
+    <div style="display:flex; gap:1rem; opacity:0.8; font-size:0.9rem;">
+        <span>📍 ${property.addressFull}</span>
+        <span>💰 ${formatPrice(property.priceTotal)}</span>
+        <span>📐 ${property.area}m²</span>
+    </div>`;
+      document.getElementById('caption-text').value = '';
+      document.getElementById('ai-persona-badge')?.remove(); // Xóa badge cũ nếu có
+      document.getElementById('modal').classList.add('show');
+      await generateCaption();
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.remove('show');
+      currentProperty = null;
+    }
+
+    async function generateCaption() {
+      const btn = document.getElementById('regen-btn');
+      const box = document.getElementById('caption-text');
+      const label = document.querySelector('.caption-label');
+
+      // Xóa badge cũ lúc bắt đầu gen
+      document.getElementById('ai-persona-badge')?.remove();
+
+      btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block"></span> Đang tạo...';
+      box.value = '🤖 AI đang phân tích dữ liệu phòng và viết caption siêu cuốn...';
+      try {
+        const res = await fetch('/api/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ property: currentProperty }) });
+        const data = await res.json();
+        box.value = data.caption || 'Lỗi tạo caption';
+
+        // Thêm badge Persona
+        if (data.persona) {
+          const badge = document.createElement('span');
+          badge.id = 'ai-persona-badge';
+          badge.style.cssText = 'background:var(--primary-light); color:var(--primary); font-size:0.75rem; padding:0.2rem 0.6rem; border-radius:99px; font-weight:700; margin-left:8px; text-transform:none; letter-spacing:0; vertical-align:middle;';
+          badge.innerHTML = `🎭 Phong cách: ${data.persona}`;
+          label.appendChild(badge);
+        }
+      } catch (e) { box.value = 'Lỗi: ' + e.message; }
+      btn.disabled = false; btn.innerHTML = '<span>🔄</span> Tạo lại';
+    }
+
+    function regenerate() { generateCaption(); }
+
+    async function doPost() {
+      const btn = document.getElementById('post-btn');
+      const caption = document.getElementById('caption-text').value;
+      if (!caption.trim()) { showToast('Vui lòng tạo caption trước!', 'error'); return; }
+      btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:18px;height:18px;border-width:2px;border-top-color:white;display:inline-block"></span> Đang đăng bài...';
+      try {
+        const res = await fetch('/api/post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ property: currentProperty, caption }) });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ Đăng bài thành công!', 'success');
+          closeModal();
+          loadProperties();
+        } else { showToast('❌ Lỗi: ' + data.error, 'error'); }
+      } catch (e) { showToast('❌ Lỗi: ' + e.message, 'error'); }
+      btn.disabled = false; btn.innerHTML = '<span>📤</span> Đăng ngay lên Fanpage';
+    }
+
+    async function loadFBPosts() {
+      const list = document.getElementById('fb-posts-list');
+      list.innerHTML = '<div class="loading"><span class="spinner"></span>Đang đồng bộ dữ liệu từ Fanpage...</div>';
+      try {
+        const res = await fetch('/api/fb-posts');
+        const data = await res.json();
+        if (!data.data?.length) { list.innerHTML = '<div class="loading"><span style="font-size:3rem;margin-bottom:1rem">📭</span>Chưa có bài đăng nào trên Fanpage</div>'; return; }
+        list.innerHTML = data.data.map((post, index) => {
+          const delay = Math.min(index * 0.05, 0.5);
+          const date = new Date(post.created_time).toLocaleString('vi-VN', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+          });
+          const attachments = post.attachments?.data?.[0]?.subattachments?.data || [];
+          const mainImg = post.full_picture;
+          let imagesHTML = '';
+
+          if (attachments.length > 0) {
+            imagesHTML = `<div class="fb-post-attachments">
+          ${attachments.slice(0, 4).map(img => `<img class="fb-post-img" src="${img.media.image.src}" loading="lazy">`).join('')}
+        </div>`;
+          } else if (mainImg) {
+            imagesHTML = `<div class="fb-post-attachments" style="grid-template-columns: 1fr;"><img class="fb-post-img" src="${mainImg}" style="aspect-ratio: auto; max-height: 500px; width: 100%;"></div>`;
+          }
+
+          return `<div class="fb-post-card animate-fade-in" style="animation-delay: ${delay}s; animation-fill-mode: both;">
+        <div class="fb-post-header">
+          <div class="fb-avatar"><img src="https://graph.facebook.com/${document.getElementById('page-select').value}/picture?type=small" onerror="this.src='https://ui-avatars.com/api/?name=J&background=0D8ABC&color=fff'"></div>
+          <div class="fb-post-info">
+            <div class="fb-post-name">JoY</div>
+            <div class="fb-post-time">${date}</div>
+          </div>
+        </div>
+        <div class="fb-post-body">${post.message || ''}</div>
+        ${imagesHTML}
+        <div class="fb-post-footer">
+          <div class="fb-action">👍 Thích</div>
+          <div class="fb-action">💬 Bình luận</div>
+          <div class="fb-action">🔗 Chia sẻ</div>
+        </div>
+      </div>`;
+        }).join('');
+      } catch (e) { list.innerHTML = '<div class="loading">❌ Lỗi tải dữ liệu: ' + e.message + '</div>'; }
+    }
+
+    function showTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('[id^="tab-"]').forEach(t => t.style.display = 'none');
+
+      const tabElements = Array.from(document.querySelectorAll('.tab'));
+      const targetTab = tabElements.find(t => t.getAttribute('onclick')?.includes(tab));
+      if (targetTab) targetTab.classList.add('active');
+
+      const content = document.getElementById('tab-' + tab);
+      content.style.display = 'block';
+      content.classList.remove('animate-slide-up');
+      // Trigger reflow
+      void content.offsetWidth;
+      content.classList.add('animate-slide-up');
+
+      if (tab === 'fbposts') loadFBPosts();
+    }
+
+    function showToast(msg, type) {
+      const existingToast = document.querySelector('.toast');
+      if (existingToast) existingToast.remove();
+
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.innerHTML = `${type === 'success' ? '✅' : '❌'} ${msg}`;
+      document.body.appendChild(t);
+
+      // Trigger animation
+      setTimeout(() => t.classList.add('show'), 10);
+      setTimeout(() => {
+        t.classList.remove('show');
+        setTimeout(() => t.remove(), 400);
+      }, 3500);
+    }
+
+    function changePage() {
+      const pageId = document.getElementById('page-select').value;
+      if (pageId === 'NEW_PAGE_ID') {
+        alert('Vui lòng cập nhật FB_PAGE_ID mới trong file .env nhé!');
+        // Revert selection
+        document.getElementById('page-select').selectedIndex = 0;
+        return;
+      }
+      showToast('Đã chuyển sang Page ID: ' + pageId, 'success');
+      if (activeTab === 'fbposts') loadFBPosts();
+    }
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', loadProperties);
+  </script>
+</body>
+
+</html>

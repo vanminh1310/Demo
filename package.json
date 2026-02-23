@@ -1,0 +1,21 @@
+{
+  "name": "novacity-autopost",
+  "version": "1.0.0",
+  "main": "auto-post.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.13.5",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "form-data": "^4.0.5",
+    "groq-sdk": "^0.37.0",
+    "sharp": "^0.34.5"
+  }
+}
