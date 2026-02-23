@@ -186,21 +186,21 @@ async function uploadAndPost(property, caption, pageId) {
 // API: Lấy danh sách phòng chưa đăng
 app.get("/api/pending", authenticate, async (req, res) => {
   try {
-    const posted = await getPosted();
+    const posted = (await getPosted()).map(String);
     console.log("🔍 Fetching properties from NovaCity API...");
     const r = await axios.get(`${process.env.NOVACITY_API}?status=AVAILABLE&limit=100`, { timeout: 30000 });
     const props = (r.data.properties || []).map(p => ({
       id: p.id, title: p.title, addressFull: p.addressFull,
       priceTotal: p.priceTotal, area: p.area,
-      images: p.images || [], posted: posted.includes(p.id),
+      images: p.images || [], posted: posted.includes(String(p.id)),
       description: p.description
     }));
-    console.log(`✅ Found ${props.length} properties.`);
+    console.log(`✅ Found ${props.length} properties. Posted: ${posted.length}`);
     res.json({ properties: props, postedCount: posted.length });
   } catch (e) {
     console.error("NovaCity API Error:", e.response?.data || e.message);
-    // Trả về dữ liệu trống thay vì lỗi 500 để giao diện không bị vỡ
-    res.json({ properties: [], postedCount: getPosted().length, error: "NovaCity API đang bận, vui lòng thử lại sau" });
+    const posted = await getPosted();
+    res.json({ properties: [], postedCount: posted.length, error: "NovaCity API đang bận, vui lòng thử lại sau" });
   }
 });
 
