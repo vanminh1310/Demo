@@ -255,4 +255,15 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+// Serve Privacy Policy (bắt buộc cho Facebook App Live Mode)
+app.get("/privacy-policy", (req, res) => {
+  res.send(`
+    <h1>Chính sách bảo mật (Privacy Policy)</h1>
+    <p>Ứng dụng NovaCity Auto-post cam kết bảo vệ quyền riêng tư của bạn.</p>
+    <p>Chúng tôi chỉ thu thập và sử dụng thông tin từ Fanpage Facebook (bình luận, bài viết) nhằm mục đích hỗ trợ tự động hóa việc đăng bài và trả lời khách hàng theo đúng chức năng mà bạn đã cấp quyền.</p>
+    <p>Chúng tôi cam kết KHÔNG bán, chia sẻ hoặc lạm dụng dữ liệu của bạn cho bất kỳ bên thứ ba nào khác ngoài việc phục vụ cho AI xử lý ngôn ngữ tự nhiên (Groq/Llama).</p>
+    <p>Nếu bạn muốn xóa dữ liệu, vui lòng gỡ ứng dụng khỏi Fanpage của bạn trong phần Cài đặt Facebook.</p>
+  `);
+});
+
 app.listen(3333, () => console.log("🚀 Dashboard chạy tại http://localhost:3333"));
