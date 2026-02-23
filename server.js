@@ -187,7 +187,7 @@ app.post("/webhook", async (req, res) => {
   // Phát tín hiệu Realtime cho tất cả các tab /debug đang mở
   io.emit('webhook_event', body);
 
-  if (body.object === "page") {
+  if (body.object === "page" || body.object === "user") {
     // Luôn trả về 200 OK ngay lập tức cho FB khỏi bị timeout
     res.status(200).send("EVENT_RECEIVED");
 
