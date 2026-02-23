@@ -55,35 +55,49 @@ function createOverlaySVG(width, height) {
 // Hàm chính: chèn logo + watermark contact vào ảnh
 async function addWatermark(imageUrl) {
   console.log(`  🖼️ Đang xử lý ảnh...`);
-  
+
   // Download ảnh gốc
   const imgBuffer = await downloadImage(imageUrl);
-  
+
   // Lấy kích thước ảnh gốc
   const meta = await sharp(imgBuffer).metadata();
   const width = meta.width || 1200;
   const height = meta.height || 800;
-  
-  // Logo resize về góc trên phải
-  const logoSize = Math.round(height * 0.12);
+
+  // Logo resize to hơn: 20% chiều cao ảnh
+  const logoHeight = Math.round(height * 0.12);
+  const logoWidth = Math.round(logoHeight * 2.2);
   const logoResized = await sharp(LOGO_PATH)
-    .resize(logoSize, Math.round(logoSize * 0.55), { fit: "inside" })
+    .resize(logoWidth, logoHeight, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 0 } })
     .toBuffer();
-  
-  // SVG overlay (banner dưới + placeholder logo vị trí)
+
+  // Tạo nền trắng bo tròn cho logo
+  const logoBgWidth = logoWidth + 20;
+  const logoBgHeight = logoHeight + 16;
+  const logoBg = Buffer.from(`
+    <svg width="${logoBgWidth}" height="${logoBgHeight}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="${logoBgWidth}" height="${logoBgHeight}" rx="10" fill="white" opacity="0.92"/>
+    </svg>
+  `);
+
+  // SVG overlay (banner dưới)
   const overlaySVG = createOverlaySVG(width, height);
-  
+
   // Ghép tất cả lại
+  const logoX = width - logoBgWidth - 16;
+  const logoY = 16;
   const result = await sharp(imgBuffer)
     .composite([
       // Banner contact dưới
       { input: overlaySVG, top: 0, left: 0 },
+      // Nền trắng cho logo
+      { input: logoBg, top: logoY, left: logoX },
       // Logo góc trên phải
-      { input: logoResized, top: 10, left: width - logoSize - 10 },
+      { input: logoResized, top: logoY + 8, left: logoX + 10 },
     ])
     .jpeg({ quality: 90 })
     .toBuffer();
-  
+
   return result;
 }
 
