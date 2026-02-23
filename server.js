@@ -207,38 +207,29 @@ app.get("/api/pending", authenticate, async (req, res) => {
   }
 });
 
-// API: Lấy danh sách phòng ĐÃ ĐĂNG kèm thống kê từ Facebook
+// API: Lấy danh sách phòng ĐÃ ĐĂNG (tối ưu: song song thay vì tuần tự)
 app.get("/api/posted", authenticate, async (req, res) => {
   try {
     const docs = await PostedProperty.find({}).sort({ postedAt: -1 });
-    const results = [];
 
-    for (const doc of docs) {
-      let fbStats = { likes: 0, comments: 0 };
-
-      // Lấy thống kê từ Facebook nếu có postId
+    // Fetch FB stats song song thay vì tuần tự → nhanh gấp N lần
+    const results = await Promise.all(docs.map(async (doc) => {
+      let likes = 0, comments = 0, picture = null;
       if (doc.postId && doc.pageId) {
         try {
           const pageToken = await getPageToken(doc.pageId);
-          const fbRes = await axios.get(`https://graph.facebook.com/v19.0/${doc.postId}?fields=likes.summary(true),comments.summary(true),full_picture&access_token=${pageToken}`);
-          fbStats.likes = fbRes.data?.likes?.summary?.total_count || 0;
-          fbStats.comments = fbRes.data?.comments?.summary?.total_count || 0;
-          fbStats.picture = fbRes.data?.full_picture || null;
+          const fbRes = await axios.get(`https://graph.facebook.com/v19.0/${doc.postId}?fields=likes.summary(true),comments.summary(true),full_picture&access_token=${pageToken}`, { timeout: 5000 });
+          likes = fbRes.data?.likes?.summary?.total_count || 0;
+          comments = fbRes.data?.comments?.summary?.total_count || 0;
+          picture = fbRes.data?.full_picture || null;
         } catch (e) { }
       }
-
-      results.push({
-        propertyId: doc.propertyId,
-        postId: doc.postId,
-        pageId: doc.pageId,
-        pageName: doc.pageName || 'N/A',
-        caption: doc.caption || '',
-        postedAt: doc.postedAt,
-        likes: fbStats.likes,
-        comments: fbStats.comments,
-        picture: fbStats.picture
-      });
-    }
+      return {
+        propertyId: doc.propertyId, postId: doc.postId, pageId: doc.pageId,
+        pageName: doc.pageName || 'N/A', caption: doc.caption || '',
+        postedAt: doc.postedAt, likes, comments, picture
+      };
+    }));
 
     res.json(results);
   } catch (e) {
