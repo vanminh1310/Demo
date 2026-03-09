@@ -1,11 +1,11 @@
 require("dotenv").config();
-const Groq = require("groq-sdk");
+const Anthropic = require("@anthropic-ai/sdk");
 const axios = require("axios");
 const fs = require("fs");
 const FormData = require("form-data");
 const { addWatermark } = require("./watermark");
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const POSTED_FILE = "posted.json";
 const PAGE_ID = process.env.FB_PAGE_ID;
 
@@ -62,8 +62,9 @@ async function generateCaption(property) {
   const selectedPersona = personas[Math.floor(Math.random() * personas.length)];
   console.log(`\n🎭 Đang dùng phong cách AI: ${selectedPersona.name}`);
 
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
+  const completion = await anthropic.messages.create({
+    model: "claude-haiku-4-5",
+    max_tokens: 1024,
     messages: [{
       role: "user",
       content: `Bạn là admin fanpage cho thuê phòng trọ tại TP.HCM. Viết bài đăng Facebook chuyên nghiệp.
@@ -94,7 +95,7 @@ YÊU CẦU BẮT BUỘC:
 - Độ dài khoảng 180-250 chữ (không kể hashtag).`
     }]
   });
-  return completion.choices[0].message.content;
+  return completion.content[0].text;
 }
 
 // Upload ảnh đã watermark lên FB (dùng multipart form)

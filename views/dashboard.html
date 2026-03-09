@@ -383,13 +383,18 @@
       modalSelect.innerHTML = mainSelect.innerHTML;
       modalSelect.value = mainSelect.value;
 
+      const descLines = (property.description || '').split(/[,\n]/).map(s => s.trim()).filter(s => s.length > 2);
+      const descHtml = descLines.length ? `<div style="font-size:0.8rem;color:#64748B;margin-top:6px;line-height:1.7;">
+        ${descLines.map(s => `- ${s}`).join('<br>')}
+      </div>` : '';
+
       document.getElementById('modal-property-info').innerHTML = `
-    <div style="font-weight:700; color:var(--primary); margin-bottom:0.25rem;">${property.title}</div>
+    <div style="font-weight:700; color:var(--primary); margin-bottom:0.25rem;">💰 ${formatPrice(property.priceTotal)}</div>
     <div style="display:flex; gap:1rem; opacity:0.8; font-size:0.9rem;">
-        <span>📍 ${stripHouseNumber(property.addressFull)}</span>
-        <span>💰 ${formatPrice(property.priceTotal)}</span>
-        <span>📐 ${property.area}m²</span>
-    </div>`;
+        <span>${stripHouseNumber(property.addressFull)}</span>
+        <span>${property.area}m²</span>
+    </div>
+    ${descHtml}`;
       document.getElementById('caption-text').value = '';
       document.getElementById('ai-persona-badge')?.remove(); // Xóa badge cũ nếu có
       document.getElementById('modal').classList.add('show');

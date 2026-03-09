@@ -1,6 +1,6 @@
 require("dotenv").config();
 const express = require("express");
-const Groq = require("groq-sdk");
+const Anthropic = require("@anthropic-ai/sdk");
 const axios = require("axios");
 const FormData = require("form-data");
 const path = require("path");
@@ -45,7 +45,7 @@ const authenticate = (req, res, next) => {
   }
 };
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 async function getPosted() {
   const docs = await PostedProperty.find({});
@@ -91,56 +91,53 @@ async function generateCaption(property) {
 
   const selectedPersona = personas[Math.floor(Math.random() * personas.length)];
 
-  // Xử lý giấu số nhà: Chỉ giữ Tên Đường, Phường, Quận
-  // "35 đường số 5, Phường 4, Quận 8, HCM" -> "đường số 5, Phường 4, Quận 8"
-  let addressFiltered = property.addressFull || "";
-  if (addressFiltered) {
-    let parts = addressFiltered.split(',').map(s => s.trim());
-    if (parts.length > 0) {
-      // Cắt số nhà: xóa phần số + ký tự liền kề ở đầu chuỗi
-      // "35 đường số 5" -> "đường số 5"
-      // "123/4B Lê Lợi" -> "Lê Lợi"  
-      // "12A-3 Nguyễn Văn A" -> "Nguyễn Văn A"
-      parts[0] = parts[0].replace(/^\d[\d\/\\\-A-Za-z.]*\s*/, '').trim();
-    }
-    // Bỏ "Hồ Chí Minh" / "TP.HCM"
-    parts = parts.filter(p => !/(Hồ Chí Minh|TP\.?HCM|Ho Chi Minh)/i.test(p));
-    addressFiltered = parts.filter(p => p.length > 0).join(', ').trim();
-    if (!addressFiltered.includes("Quận 8") && !addressFiltered.includes("Q8")) {
-      addressFiltered += ", Quận 8";
-    }
-  }
+  // Bỏ tên đường (phần đầu), chỉ giữ khu/phường/quận để không lộ địa chỉ cụ thể
+  const addrParts = (property.addressFull || '').split(',').map(s => s.trim()).filter(Boolean);
+  const addressFiltered = addrParts.length > 1 ? addrParts.slice(1).join(', ') : (property.addressFull || 'TP.HCM');
 
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
+  // Tổng hợp thông tin nội thất & tiện ích
+  const tienIch = [];
+  if (property.bedrooms) tienIch.push(`${property.bedrooms} phòng ngủ`);
+  if (property.bathrooms) tienIch.push(`${property.bathrooms} WC riêng`);
+  if (property.furnishing) tienIch.push(property.furnishing);
+  if (property.features?.length) tienIch.push(...property.features);
+
+  const completion = await anthropic.messages.create({
+    model: "claude-haiku-4-5",
+    max_tokens: 1200,
+    system: `Bạn viết bài đăng Facebook cho thuê phòng trọ tại TP.HCM.
+
+QUY TẮC TUYỆT ĐỐI – VI PHẠM LÀ SAI:
+1. CHỈ dùng đúng thông tin trong phần "DỮ LIỆU PHÒNG". KHÔNG thêm, KHÔNG bịa, KHÔNG suy diễn bất kỳ thông tin nào.
+2. Địa chỉ: chép NGUYÊN VĂN từ dữ liệu, KHÔNG tự sửa, KHÔNG thêm tên khu/địa điểm khác.
+3. Giá và diện tích: dùng đúng số được cung cấp, KHÔNG làm tròn hay đổi đơn vị.
+4. Tiện ích: CHỈ liệt kê những gì có trong "Nội thất & tiện ích" và "Mô tả". KHÔNG thêm tiện ích không có.
+5. KHÔNG dùng markdown (**, ##, __).
+6. Phần liệt kê tiện ích (dòng 4-9): dùng "- " gạch đầu dòng, KHÔNG dùng emoji.`,
     messages: [{
-      role: "user", content: `Bạn là admin fanpage cho thuê phòng trọ tại TP.HCM.
-
-PHONG CÁCH YÊU CẦU CHO LẦN ĐĂNG NÀY:
-${selectedPersona.description}
-
-NHIỆM VỤ: Viết bài đăng Facebook cho thuê phòng trọ theo đúng phong cách yêu cầu trên. KHÔNG dùng markdown ** hay ##.
+      role: "user", content: `PHONG CÁCH BÀI VIẾT: ${selectedPersona.description}
 
 CẤU TRÚC:
-Dòng 1: Câu mở đầu hấp dẫn phù hợp phong cách
-Dòng 2: 📍 Địa chỉ (CHỈ ghi tên đường + phường + quận, TUYỆT ĐỐI KHÔNG ghi số nhà vì lý do bảo mật)
-Dòng 3: 💰 Giá + diện tích
-Dòng 4-8: Liệt kê các TIỆN ÍCH và PHÍ DỊCH VỤ (điện, nước, rác...). MỖI Ý PHẢI XUỐNG DÒNG RIÊNG BIỆT (bắt đầu bằng emoji phù hợp)
-Dòng 9: Câu tạo cảm giác gấp háp/kêu gọi hành động
-Dòng 10: Inbox ngay / Nhắn tin ngay!
+Dòng 1: Tiêu đề (loại phòng + khu vực từ địa chỉ bên dưới, phong cách phù hợp)
+Dòng 2: 📍 [địa chỉ nguyên văn]
+Dòng 3: 💰 [giá]/tháng | 📐 [diện tích]m²
+Dòng 4-9: mỗi dòng "- [tiện ích/chi phí]", chỉ liệt kê những gì có trong dữ liệu
+Dòng 10: câu kêu gọi hành động
 Dòng 11: 📞 033 234 7879 | Zalo: 033 234 7879
-Dòng cuối: DÁNH SÁCH HASHTAG BẮT ĐẦU BẰNG DẤU # VÀ CÁCH NHAU BẰNG DẤU CÁCH. Bắt buộc phải có hashtag #novacity.
+Dòng cuối: #novacity #chothuephong #phongtro + hashtag khu vực phù hợp
 
-THÔNG TIN:
-Tiêu đề: ${property.title}
+DỮ LIỆU PHÒNG:
+Loại: ${property.category || 'Phòng trọ'}
+Tiêu đề gốc: ${property.title}
 Địa chỉ: ${addressFiltered}
 Giá: ${gia}/tháng | Diện tích: ${property.area}m²
-Mô tả: ${(property.description || "").substring(0, 400)}`
+Nội thất & tiện ích: ${tienIch.join(', ') || '(không có)'}
+Mô tả điện/nước/dịch vụ: ${(property.description || '(không có)').substring(0, 500)}`
     }]
   });
 
   return {
-    content: completion.choices[0].message.content,
+    content: completion.content[0].text,
     persona: selectedPersona.name
   };
 }
@@ -192,12 +189,31 @@ app.get("/api/pending", authenticate, async (req, res) => {
     const posted = (await getPosted()).map(String);
     console.log("🔍 Fetching properties from NovaCity API...");
     const r = await axios.get(`${process.env.NOVACITY_API}?status=AVAILABLE&limit=100`, { timeout: 30000 });
-    const props = (r.data.properties || []).map(p => ({
-      id: p.id, title: p.title, addressFull: p.addressFull,
-      priceTotal: p.priceTotal, area: p.area,
-      images: p.images || [], posted: posted.includes(String(p.id)),
-      description: p.description
-    }));
+    const FEATURE_MAP = {
+      wifi: 'WiFi miễn phí', GIUONG: 'Giường', SOFA: 'Sofa', NEM: 'Nệm',
+      MAYLANH: 'Máy lạnh', KEBEP: 'Bếp nấu', TULANH: 'Tủ lạnh',
+      TUQUANAO: 'Tủ quần áo', BANAN: 'Ban công', balcony: 'Ban công',
+      BONGTAM: 'Bồn tắm', MAYGIO: 'Máy giặt', TV: 'TV', BANCONG: 'Ban công'
+    };
+    const FURNISH_MAP = { FULL: 'Full nội thất', BASIC: 'Nội thất cơ bản', NONE: 'Không nội thất' };
+    const props = (r.data.properties || []).map(p => {
+      const addrParts = [];
+      if (p.street?.name) addrParts.push(p.street.name.trim());
+      if (p.ward?.name) addrParts.push(p.ward.name.trim());
+      if (p.district?.name) addrParts.push(p.district.name.trim());
+      const addressFull = addrParts.join(', ') || p.addressFull || '';
+      const features = (p.features || []).map(f => FEATURE_MAP[f] || f);
+      return {
+        id: p.id, title: p.title, addressFull,
+        priceTotal: p.priceTotal, area: p.area,
+        bedrooms: p.bedrooms, bathrooms: p.bathrooms,
+        furnishing: FURNISH_MAP[p.furnishing] || p.furnishing || '',
+        features, category: p.category?.name || '',
+        googleMapsLink: p.googleMapsLink || '',
+        images: p.images || [], posted: posted.includes(String(p.id)),
+        description: p.description
+      };
+    });
     console.log(`✅ Found ${props.length} properties. Posted: ${posted.length}`);
     res.json({ properties: props, postedCount: posted.length });
   } catch (e) {
@@ -468,18 +484,17 @@ app.post("/webhook", async (req, res) => {
 
           try {
             // 3. Dùng AI chém gió và tạo câu trả lời
-            const completion = await groq.chat.completions.create({
-              model: "llama-3.3-70b-versatile",
+            const completion = await anthropic.messages.create({
+              model: "claude-haiku-4-5",
+              max_tokens: 256,
+              system: "Bạn là nhân viên tư vấn nhiệt tình của Fanpage cho thuê phòng trọ NovaCity tại TP.HCM. Khách hàng vừa comment hỏi về phòng trọ (có thể là hỏi giá, còn phòng không, inbox). Hãy viết một câu trả lời CỰC KỲ NGẮN GỌN (dưới 3 câu), lịch sự, mời họ check inbox hoặc nhắn tin trực tiếp để trao đổi chi tiết. Không cần chào hỏi dài dòng, đi thẳng vào vấn đề.",
               messages: [{
-                role: "system",
-                content: "Bạn là nhân viên tư vấn nhiệt tình của Fanpage cho thuê phòng trọ NovaCity tại TP.HCM. Khách hàng vừa comment hỏi về phòng trọ (có thể là hỏi giá, còn phòng không, inbox). Hãy viết một câu trả lời CỰC KỲ NGẮN GỌN (dưới 3 câu), lịch sự, mời họ check inbox hoặc nhắn tin trực tiếp để trao đổi chi tiết. Không cần chào hỏi dài dòng, đi thẳng vào vấn đề."
-              }, {
                 role: "user",
                 content: `Khách hàng comment: "${message}"`
               }]
             });
 
-            const replyMsg = completion.choices[0].message.content;
+            const replyMsg = completion.content[0].text;
             console.log(`🤖 AI Reply: "${replyMsg}"`);
 
             const pageToken = await getPageToken(targetPageId);

@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
@@ -20,6 +21,9 @@
     "groq-sdk": "^0.37.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.1",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.1",
+    "playwright": "^1.58.2",
     "sharp": "^0.34.5",
     "socket.io": "^4.8.3"
   }
